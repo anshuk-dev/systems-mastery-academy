@@ -2,7 +2,7 @@
 
 > **Growing capacity predictably by orders of magnitude without collapsing under coordination cost**
 
-Scalability is not 'add Kubernetes'. True scalability means keeping latency, cost-per-unit-work, and operational toil linear—or sublinear—as traffic, data volume, and failure rates grow 10x–100x.
+Scalability is not 'add Kubernetes'. True scalability means keeping latency, cost-per-unit-work, and operational toil linear—or sublinear—as traffic, data volume, and failure rates grow orders-of-magnitude.
 
 **Core Mental Model:** Every system hits a wall where adding more machines stops helping or actually makes throughput WORSE. Your job is to identify the hidden serialization point—a lock, a primary DB, a shared counter, or cross-node chatter—and remove or partition it.
 
@@ -38,6 +38,12 @@ Scalability is not 'add Kubernetes'. True scalability means keeping latency, cos
 
 > **Rule of Thumb:** Whenever someone proposes 'just add more replicas', ask: 'What shared resource will those extra replicas contend on?'
 
+### Verified Primary Sources
+
+- [Amdahl's Law (AFIPS 1967)](https://en.wikipedia.org/wiki/Amdahl%27s_law) — Gene Amdahl (via Wikipedia)
+- [A General Theory of Computational Scalability Based on Rational Functions (USL)](https://arxiv.org/abs/0808.1431) — Neil J. Gunther (arXiv:0808.1431)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+
 ---
 
 ## Data Partitioning, Replication & Consistency (30 min)
@@ -70,6 +76,12 @@ Scalability is not 'add Kubernetes'. True scalability means keeping latency, cos
 
 > **Rule of Thumb:** Scale reads with caching and replicas first; scale writes by shedding/batching second; shard data ONLY when a single write primary truly cannot keep up.
 
+### Verified Primary Sources
+
+- [Consistent Hashing and Random Trees (STOC 1997)](https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf) — David Karger et al. (MIT / Princeton CS)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+- [CQRS pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs) — Microsoft Azure Architecture Center
+
 ---
 
 ## Backpressure, Load Shedding & Geo-Distribution (30 min)
@@ -85,7 +97,7 @@ Scalability is not 'add Kubernetes'. True scalability means keeping latency, cos
 
 - A system at 300% load WITHOUT load shedding serves 0% successful requests because every request times out after wasting CPU. With load shedding of 67% at the edge, it serves 100% of capacity cleanly.
 - Always shed by business priority and cost: drop background analytics, bots, and unauthenticated crawls before dropping checkout payments or login.
-- Multi-region Active-Active is exponentially harder than multi-AZ. Most companies think they need Active-Active writes when Geo-routed reads + single-region/home-pinned writes gives 95% of the benefit at 10% of the complexity.
+- Multi-region Active-Active is exponentially harder than multi-AZ. Most companies think they need Active-Active writes when Geo-routed reads + single-region/home-pinned writes delivers local read latency and compliance without multi-leader conflict complexity.
 
 ### Architectural Trade-off Matrix
 
@@ -101,5 +113,11 @@ Scalability is not 'add Kubernetes'. True scalability means keeping latency, cos
 - Testing disaster failover only on paper (a DR plan that isn't exercised in chaos/gamedays doesn't work).
 
 > **Rule of Thumb:** Protect goodput at all costs: reject early at the cheapest layer, prioritize critical revenue/control-plane paths, and propagate deadlines downstream.
+
+### Verified Primary Sources
+
+- [Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) — David Yanacek (AWS Builders' Library)
+- [Scaling your API with rate limiters](https://stripe.com/blog/rate-limiters) — Paul Tarjan (Stripe Engineering)
+- [Rate Limiting Algorithms](https://redis.io/glossary/rate-limiting/) — Redis Glossary
 
 ---

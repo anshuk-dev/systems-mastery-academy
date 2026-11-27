@@ -28,7 +28,7 @@ Premature optimization adds complexity for zero gain; disciplined optimization s
 | Approach | Pros | Cons | When to Use |
 |---|---|---|---|
 | **Hedged Requests (Speculative Retry)** | Dramatically cuts p99 tail latency caused by transient GC pauses or noisy neighbors. | Increases baseline load by ~1-5% (if triggered at p95 delay); dangerous without a strict hedge budget during outages. | Idempotent, low-cost read paths with large fan-out and strict p99 SLOs. |
-| **Latency vs Throughput Batching** | Amortizes syscall, network, and fsync overhead—10x throughput gain. | Adds micro-batching wait delay (linger.ms) to individual request latency. | High-volume telemetry, event ingestion, Kafka producers, and bulk DB writes. |
+| **Latency vs Throughput Batching** | Amortizes syscall, network, and fsync overhead—major throughput gains by amortizing per-request overhead. | Adds micro-batching wait delay (linger.ms) to individual request latency. | High-volume telemetry, event ingestion, Kafka producers, and bulk DB writes. |
 
 ### Common Anti-Patterns
 
@@ -37,6 +37,14 @@ Premature optimization adds complexity for zero gain; disciplined optimization s
 - Disabling health/circuit protections during high utilization, triggering metastable collapse.
 
 > **Rule of Thumb:** Never optimize what you haven't profiled under realistic concurrency. Use a flamegraph to find the widest bar, not the prettiest loop.
+
+### Verified Primary Sources
+
+- [Little's Law (Operations Research, 1961)](https://en.wikipedia.org/wiki/Little%27s_law) — John D. C. Little (via Wikipedia)
+- [The Tail at Scale (CACM, 2013)](https://research.google/pubs/the-tail-at-scale/) — Jeffrey Dean & Luiz André Barroso (Google)
+- [The USE Method](https://www.brendangregg.com/usemethod.html) — Brendan Gregg
+- [The RED Method: How to Instrument Your Services](https://grafana.com/blog/the-red-method-how-to-instrument-your-services/) — Tom Wilkie (Grafana Labs)
+- [Metastable Failures in Distributed Systems (HotOS 2021)](https://charap.co/metastable-failures-in-distributed-systems/) — Bronson, Aghayev, Charapko & Zhu
 
 ---
 
@@ -70,6 +78,12 @@ Premature optimization adds complexity for zero gain; disciplined optimization s
 
 > **Rule of Thumb:** Count your network round trips first. Eliminating 5 sequential 2ms RPCs saves 10ms instantly; optimizing a hash map saves 10 microseconds.
 
+### Verified Primary Sources
+
+- [About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) — Brett Wooldridge (HikariCP Wiki)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+- [The USE Method](https://www.brendangregg.com/usemethod.html) — Brendan Gregg
+
 ---
 
 ## Database Access & Caching Mastery (30 min)
@@ -101,5 +115,13 @@ Premature optimization adds complexity for zero gain; disciplined optimization s
 - Using `SELECT *` with ORMs that silently eager-load megabytes of unused text/JSON columns.
 
 > **Rule of Thumb:** Fix the query plan and indexes FIRST, add connection pooling SECOND, and add caching THIRD—with explicit stampede and negative-lookup protection.
+
+### Verified Primary Sources
+
+- [We Need Tooling for Keyset Pagination (No Offset)](https://use-the-index-luke.com/no-offset) — Markus Winand (Use The Index, Luke)
+- [Concatenated Indexes (Leftmost Prefix Rule)](https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys) — Markus Winand (Use The Index, Luke)
+- [Index-Only Scan / Covering Indexes](https://use-the-index-luke.com/sql/clustering/index-only-scan-covering-index) — Markus Winand (Use The Index, Luke)
+- [Cache-Aside pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside) — Microsoft Azure Architecture Center
+- [Optimal Probabilistic Cache Stampede Prevention (XFetch)](https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf) — Vattani, Chierichetti & Lowenstein (2015)
 
 ---

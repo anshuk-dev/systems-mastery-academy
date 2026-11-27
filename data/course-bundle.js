@@ -52,7 +52,19 @@ window.COURSE_DATA = {
             "Event-Carried State Bloat / Thin-Event Ping-Pong: publishing empty events that force 10 consumers to immediately DDoS the producer's GET endpoint.",
             "Synchronous Call Chains (>3 hops) on critical user checkout or login paths."
           ],
-          "heuristic": "Ask: 'If the downstream system goes down for 15 minutes, must my caller fail immediately?' If no, never put a synchronous network call on that path."
+          "heuristic": "Ask: 'If the downstream system goes down for 15 minutes, must my caller fail immediately?' If no, never put a synchronous network call on that path.",
+          "sources": [
+            {
+              "title": "Enterprise Integration Patterns",
+              "author": "Gregor Hohpe & Bobby Woolf",
+              "url": "https://www.enterpriseintegrationpatterns.com/"
+            },
+            {
+              "title": "What do you mean by 'Event-Driven'?",
+              "author": "Martin Fowler",
+              "url": "https://martinfowler.com/articles/201701-event-driven.html"
+            }
+          ]
         },
         {
           "id": "int-2",
@@ -94,7 +106,24 @@ window.COURSE_DATA = {
             "Blindly retrying non-idempotent POST/charge requests on socket timeouts (read timeout != request failed).",
             "Infinite retry loops on poison-pill messages that block an entire Kafka partition."
           ],
-          "heuristic": "Never trust a timeout to mean 'nothing happened'. Treat timeouts as 'unknown outcome' and require idempotency before retrying."
+          "heuristic": "Never trust a timeout to mean 'nothing happened'. Treat timeouts as 'unknown outcome' and require idempotency before retrying.",
+          "sources": [
+            {
+              "title": "Pattern: Transactional Outbox",
+              "author": "Chris Richardson (microservices.io)",
+              "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+            },
+            {
+              "title": "Pattern: Saga",
+              "author": "Chris Richardson (microservices.io)",
+              "url": "https://microservices.io/patterns/data/saga.html"
+            },
+            {
+              "title": "Designing robust and predictable APIs with idempotency",
+              "author": "Brandur Leach (Stripe Engineering)",
+              "url": "https://stripe.com/blog/idempotency"
+            }
+          ]
         },
         {
           "id": "int-3",
@@ -130,7 +159,39 @@ window.COURSE_DATA = {
             "Default infinite or 60-second HTTP client timeouts.",
             "Exposing raw vendor/ERP field names directly in your public API responses."
           ],
-          "heuristic": "Retry only at ONE layer (typically closest to the origin or via explicit deadline propagation), always with jitter and a retry budget."
+          "heuristic": "Retry only at ONE layer (typically closest to the origin or via explicit deadline propagation), always with jitter and a retry budget.",
+          "sources": [
+            {
+              "title": "Anti-corruption Layer pattern",
+              "author": "Microsoft Azure Architecture Center",
+              "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer"
+            },
+            {
+              "title": "Timeouts, retries, and backoff with jitter",
+              "author": "Marc Brooker (AWS Builders' Library)",
+              "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+            },
+            {
+              "title": "Exponential Backoff And Jitter",
+              "author": "Marc Brooker (AWS Architecture Blog)",
+              "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+            },
+            {
+              "title": "Bulkhead pattern",
+              "author": "Microsoft Azure Architecture Center",
+              "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+            },
+            {
+              "title": "Circuit Breaker pattern",
+              "author": "Microsoft Azure Architecture Center",
+              "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+            },
+            {
+              "title": "Consumer-Driven Contract Testing (Pact Docs)",
+              "author": "Pact Foundation",
+              "url": "https://docs.pact.io/"
+            }
+          ]
         }
       ]
     },
@@ -177,7 +238,24 @@ window.COURSE_DATA = {
             "Anemic Domain Model: data bags with getters/setters and business invariants scattered across 15 service classes.",
             "Premature abstraction ('just in case' interfaces with only one implementation that mirrors the concrete class 1:1)."
           ],
-          "heuristic": "Duplicate code before coupling domains. Wait for three real divergent use cases (Rule of Three) before extracting a shared abstraction."
+          "heuristic": "Duplicate code before coupling domains. Wait for three real divergent use cases (Rule of Three) before extracting a shared abstraction.",
+          "sources": [
+            {
+              "title": "Connascence (Software Engineering)",
+              "author": "Meilir Page-Jones (via Wikipedia)",
+              "url": "https://en.wikipedia.org/wiki/Connascence"
+            },
+            {
+              "title": "Bounded Context",
+              "author": "Martin Fowler",
+              "url": "https://martinfowler.com/bliki/BoundedContext.html"
+            },
+            {
+              "title": "Decompose by Business Capability",
+              "author": "Chris Richardson (microservices.io)",
+              "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+            }
+          ]
         },
         {
           "id": "mod-2",
@@ -199,7 +277,7 @@ window.COURSE_DATA = {
               "option": "Modular Monolith",
               "pros": "ACID transactions inside modules, zero network serialization tax, single CI/CD, trivial refactoring across boundaries.",
               "cons": "Shared failure domain (OOM kills process), single language/runtime, requires discipline to keep boundaries clean.",
-              "whenToUse": "90% of early-to-mid scale systems and teams under ~50-80 engineers."
+              "whenToUse": "Early-to-mid scale systems and teams that do not yet face independent release or scaling bottlenecks (Fowler's MonolithFirst)."
             },
             {
               "option": "Microservices",
@@ -213,7 +291,24 @@ window.COURSE_DATA = {
             "Entity leakage: returning ORM database entities directly from REST controllers or cross-module APIs.",
             "Allowing Domain Core to import HTTP, SQL, or framework annotations."
           ],
-          "heuristic": "If two services always have to be deployed together to ship one feature, they are one logical module pretending to be two."
+          "heuristic": "If two services always have to be deployed together to ship one feature, they are one logical module pretending to be two.",
+          "sources": [
+            {
+              "title": "Hexagonal Architecture (Ports and Adapters)",
+              "author": "Alistair Cockburn",
+              "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+            },
+            {
+              "title": "MonolithFirst",
+              "author": "Martin Fowler",
+              "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+            },
+            {
+              "title": "Microservices",
+              "author": "James Lewis & Martin Fowler",
+              "url": "https://martinfowler.com/articles/microservices.html"
+            }
+          ]
         },
         {
           "id": "mod-3",
@@ -249,7 +344,29 @@ window.COURSE_DATA = {
             "Siloed 'Backend / Frontend / DBA' teams building microservices—guarantees multi-team tickets for every trivial change.",
             "Unmonitored feature flags left behind after migrations, creating exponential test matrices."
           ],
-          "heuristic": "Never start a migration without knowing how you will verify parity and how you will roll back in under 5 minutes."
+          "heuristic": "Never start a migration without knowing how you will verify parity and how you will roll back in under 5 minutes.",
+          "sources": [
+            {
+              "title": "How Do Committees Invent? (Conway's Law, 1968)",
+              "author": "Melvin E. Conway",
+              "url": "https://www.melconway.com/Home/Conways_Law.html"
+            },
+            {
+              "title": "Strangler Fig Application",
+              "author": "Martin Fowler",
+              "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+            },
+            {
+              "title": "Branch by Abstraction",
+              "author": "Martin Fowler",
+              "url": "https://martinfowler.com/bliki/BranchByAbstraction.html"
+            },
+            {
+              "title": "Fitness Function-Driven Development",
+              "author": "Thoughtworks",
+              "url": "https://www.thoughtworks.com/insights/articles/fitness-function-driven-development"
+            }
+          ]
         }
       ]
     },
@@ -286,7 +403,7 @@ window.COURSE_DATA = {
             },
             {
               "option": "Latency vs Throughput Batching",
-              "pros": "Amortizes syscall, network, and fsync overhead—10x throughput gain.",
+              "pros": "Amortizes syscall, network, and fsync overhead—major throughput gains by amortizing per-request overhead.",
               "cons": "Adds micro-batching wait delay (linger.ms) to individual request latency.",
               "whenToUse": "High-volume telemetry, event ingestion, Kafka producers, and bulk DB writes."
             }
@@ -296,7 +413,34 @@ window.COURSE_DATA = {
             "Reporting only average latency in executive dashboards.",
             "Disabling health/circuit protections during high utilization, triggering metastable collapse."
           ],
-          "heuristic": "Never optimize what you haven't profiled under realistic concurrency. Use a flamegraph to find the widest bar, not the prettiest loop."
+          "heuristic": "Never optimize what you haven't profiled under realistic concurrency. Use a flamegraph to find the widest bar, not the prettiest loop.",
+          "sources": [
+            {
+              "title": "Little's Law (Operations Research, 1961)",
+              "author": "John D. C. Little (via Wikipedia)",
+              "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+            },
+            {
+              "title": "The Tail at Scale (CACM, 2013)",
+              "author": "Jeffrey Dean & Luiz André Barroso (Google)",
+              "url": "https://research.google/pubs/the-tail-at-scale/"
+            },
+            {
+              "title": "The USE Method",
+              "author": "Brendan Gregg",
+              "url": "https://www.brendangregg.com/usemethod.html"
+            },
+            {
+              "title": "The RED Method: How to Instrument Your Services",
+              "author": "Tom Wilkie (Grafana Labs)",
+              "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+            },
+            {
+              "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+              "author": "Bronson, Aghayev, Charapko & Zhu",
+              "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+            }
+          ]
         },
         {
           "id": "opt-2",
@@ -332,7 +476,24 @@ window.COURSE_DATA = {
             "Unbounded queues in front of worker pools (causes OOM crashes and stale timeouts).",
             "Loading entire paginated exports into RAM instead of cursor streaming."
           ],
-          "heuristic": "Count your network round trips first. Eliminating 5 sequential 2ms RPCs saves 10ms instantly; optimizing a hash map saves 10 microseconds."
+          "heuristic": "Count your network round trips first. Eliminating 5 sequential 2ms RPCs saves 10ms instantly; optimizing a hash map saves 10 microseconds.",
+          "sources": [
+            {
+              "title": "About Pool Sizing",
+              "author": "Brett Wooldridge (HikariCP Wiki)",
+              "url": "https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"
+            },
+            {
+              "title": "Designing Data-Intensive Applications",
+              "author": "Martin Kleppmann",
+              "url": "https://dataintensive.net/"
+            },
+            {
+              "title": "The USE Method",
+              "author": "Brendan Gregg",
+              "url": "https://www.brendangregg.com/usemethod.html"
+            }
+          ]
         },
         {
           "id": "opt-3",
@@ -368,7 +529,34 @@ window.COURSE_DATA = {
             "Negative caching omission: allowing bot attacks on random missing IDs to punch straight through Redis to primary SQL.",
             "Using `SELECT *` with ORMs that silently eager-load megabytes of unused text/JSON columns."
           ],
-          "heuristic": "Fix the query plan and indexes FIRST, add connection pooling SECOND, and add caching THIRD—with explicit stampede and negative-lookup protection."
+          "heuristic": "Fix the query plan and indexes FIRST, add connection pooling SECOND, and add caching THIRD—with explicit stampede and negative-lookup protection.",
+          "sources": [
+            {
+              "title": "We Need Tooling for Keyset Pagination (No Offset)",
+              "author": "Markus Winand (Use The Index, Luke)",
+              "url": "https://use-the-index-luke.com/no-offset"
+            },
+            {
+              "title": "Concatenated Indexes (Leftmost Prefix Rule)",
+              "author": "Markus Winand (Use The Index, Luke)",
+              "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+            },
+            {
+              "title": "Index-Only Scan / Covering Indexes",
+              "author": "Markus Winand (Use The Index, Luke)",
+              "url": "https://use-the-index-luke.com/sql/clustering/index-only-scan-covering-index"
+            },
+            {
+              "title": "Cache-Aside pattern",
+              "author": "Microsoft Azure Architecture Center",
+              "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+            },
+            {
+              "title": "Optimal Probabilistic Cache Stampede Prevention (XFetch)",
+              "author": "Vattani, Chierichetti & Lowenstein (2015)",
+              "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+            }
+          ]
         }
       ]
     },
@@ -378,7 +566,7 @@ window.COURSE_DATA = {
       "name": "System Scalability",
       "tagline": "Growing capacity predictably by orders of magnitude without collapsing under coordination cost",
       "color": "#f59e0b",
-      "summary": "Scalability is not 'add Kubernetes'. True scalability means keeping latency, cost-per-unit-work, and operational toil linear—or sublinear—as traffic, data volume, and failure rates grow 10x–100x.",
+      "summary": "Scalability is not 'add Kubernetes'. True scalability means keeping latency, cost-per-unit-work, and operational toil linear—or sublinear—as traffic, data volume, and failure rates grow orders-of-magnitude.",
       "mentalModel": "Every system hits a wall where adding more machines stops helping or actually makes throughput WORSE. Your job is to identify the hidden serialization point—a lock, a primary DB, a shared counter, or cross-node chatter—and remove or partition it.",
       "lessons": [
         {
@@ -415,7 +603,24 @@ window.COURSE_DATA = {
             "Global distributed locking on high-frequency workflows.",
             "Ignoring capacity headroom (running at 85% steady state leaves zero room for a single AZ failure)."
           ],
-          "heuristic": "Whenever someone proposes 'just add more replicas', ask: 'What shared resource will those extra replicas contend on?'"
+          "heuristic": "Whenever someone proposes 'just add more replicas', ask: 'What shared resource will those extra replicas contend on?'",
+          "sources": [
+            {
+              "title": "Amdahl's Law (AFIPS 1967)",
+              "author": "Gene Amdahl (via Wikipedia)",
+              "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+            },
+            {
+              "title": "A General Theory of Computational Scalability Based on Rational Functions (USL)",
+              "author": "Neil J. Gunther (arXiv:0808.1431)",
+              "url": "https://arxiv.org/abs/0808.1431"
+            },
+            {
+              "title": "Designing Data-Intensive Applications",
+              "author": "Martin Kleppmann",
+              "url": "https://dataintensive.net/"
+            }
+          ]
         },
         {
           "id": "sca-2",
@@ -451,7 +656,24 @@ window.COURSE_DATA = {
             "Doing scatter-gather cross-shard queries on hot user-facing endpoints.",
             "Assuming eventual consistency means 'zero UX work'—failing to design optimistic UI or read-your-own-writes guarantees."
           ],
-          "heuristic": "Scale reads with caching and replicas first; scale writes by shedding/batching second; shard data ONLY when a single write primary truly cannot keep up."
+          "heuristic": "Scale reads with caching and replicas first; scale writes by shedding/batching second; shard data ONLY when a single write primary truly cannot keep up.",
+          "sources": [
+            {
+              "title": "Consistent Hashing and Random Trees (STOC 1997)",
+              "author": "David Karger et al. (MIT / Princeton CS)",
+              "url": "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf"
+            },
+            {
+              "title": "Designing Data-Intensive Applications",
+              "author": "Martin Kleppmann",
+              "url": "https://dataintensive.net/"
+            },
+            {
+              "title": "CQRS pattern",
+              "author": "Microsoft Azure Architecture Center",
+              "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs"
+            }
+          ]
         },
         {
           "id": "sca-3",
@@ -466,7 +688,7 @@ window.COURSE_DATA = {
           "wisdom": [
             "A system at 300% load WITHOUT load shedding serves 0% successful requests because every request times out after wasting CPU. With load shedding of 67% at the edge, it serves 100% of capacity cleanly.",
             "Always shed by business priority and cost: drop background analytics, bots, and unauthenticated crawls before dropping checkout payments or login.",
-            "Multi-region Active-Active is exponentially harder than multi-AZ. Most companies think they need Active-Active writes when Geo-routed reads + single-region/home-pinned writes gives 95% of the benefit at 10% of the complexity."
+            "Multi-region Active-Active is exponentially harder than multi-AZ. Most companies think they need Active-Active writes when Geo-routed reads + single-region/home-pinned writes delivers local read latency and compliance without multi-leader conflict complexity."
           ],
           "tradeoffs": [
             {
@@ -487,7 +709,24 @@ window.COURSE_DATA = {
             "Retry-after omission on 429/503 responses, causing clients to immediately hammer the gateway again.",
             "Testing disaster failover only on paper (a DR plan that isn't exercised in chaos/gamedays doesn't work)."
           ],
-          "heuristic": "Protect goodput at all costs: reject early at the cheapest layer, prioritize critical revenue/control-plane paths, and propagate deadlines downstream."
+          "heuristic": "Protect goodput at all costs: reject early at the cheapest layer, prioritize critical revenue/control-plane paths, and propagate deadlines downstream.",
+          "sources": [
+            {
+              "title": "Using load shedding to avoid overload",
+              "author": "David Yanacek (AWS Builders' Library)",
+              "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+            },
+            {
+              "title": "Scaling your API with rate limiters",
+              "author": "Paul Tarjan (Stripe Engineering)",
+              "url": "https://stripe.com/blog/rate-limiters"
+            },
+            {
+              "title": "Rate Limiting Algorithms",
+              "author": "Redis Glossary",
+              "url": "https://redis.io/glossary/rate-limiting/"
+            }
+          ]
         }
       ]
     },
@@ -534,7 +773,29 @@ window.COURSE_DATA = {
             "Local Optimization Bias: speeding up one service 10x only to discover it now overwhelms the unscaled downstream payment partner.",
             "Missing Ownership: 'shared' infrastructure or queues that belong to everyone and therefore no one during a 2 AM outage."
           ],
-          "heuristic": "Optimize for reversibility, debuggability at 2 AM, and alignment with team topology—not diagram elegance."
+          "heuristic": "Optimize for reversibility, debuggability at 2 AM, and alignment with team topology—not diagram elegance.",
+          "sources": [
+            {
+              "title": "MonolithFirst",
+              "author": "Martin Fowler",
+              "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+            },
+            {
+              "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+              "author": "Bronson, Aghayev, Charapko & Zhu",
+              "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+            },
+            {
+              "title": "The Tail at Scale (CACM, 2013)",
+              "author": "Jeffrey Dean & Luiz André Barroso (Google)",
+              "url": "https://research.google/pubs/the-tail-at-scale/"
+            },
+            {
+              "title": "Designing Data-Intensive Applications",
+              "author": "Martin Kleppmann",
+              "url": "https://dataintensive.net/"
+            }
+          ]
         }
       ]
     }
@@ -572,7 +833,19 @@ window.COURSE_DATA = {
           "whyWrong": "`acks=all` and producer idempotence only make Kafka's internal replication and retry within a live producer reliable—they cannot bridge the crash window between a separate PostgreSQL `COMMIT` and calling `send()`."
         }
       },
-      "wisdomTakeaway": "Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox."
+      "wisdomTakeaway": "Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox.",
+      "sources": [
+        {
+          "title": "Pattern: Transactional Outbox",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+        },
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        }
+      ]
     },
     {
       "id": "INT-02",
@@ -606,7 +879,19 @@ window.COURSE_DATA = {
           "whyWrong": "If the first charge is still in-flight or replicated asynchronously when `GET` runs, `GET` returns nothing, Checkout retries `POST`, and both charges succeed concurrently. Also fails if a legitimate repeat purchase happens seconds apart."
         }
       },
-      "wisdomTakeaway": "Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry."
+      "wisdomTakeaway": "Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry.",
+      "sources": [
+        {
+          "title": "Designing robust and predictable APIs with idempotency",
+          "author": "Brandur Leach (Stripe Engineering)",
+          "url": "https://stripe.com/blog/idempotency"
+        },
+        {
+          "title": "Timeouts, retries, and backoff with jitter",
+          "author": "Marc Brooker (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+        }
+      ]
     },
     {
       "id": "INT-03",
@@ -640,7 +925,24 @@ window.COURSE_DATA = {
           "whyWrong": "Sleeping 5s+ across all layers multiplies concurrency `L = lambda * W`, exhausting threads/file descriptors across Gateway, A, and B while still keeping the 64x multiplicative retry fan-out."
         }
       },
-      "wisdomTakeaway": "Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines."
+      "wisdomTakeaway": "Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines.",
+      "sources": [
+        {
+          "title": "Timeouts, retries, and backoff with jitter",
+          "author": "Marc Brooker (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+        },
+        {
+          "title": "Exponential Backoff And Jitter",
+          "author": "Marc Brooker (AWS Architecture Blog)",
+          "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+        },
+        {
+          "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+          "author": "Bronson, Aghayev, Charapko & Zhu",
+          "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+        }
+      ]
     },
     {
       "id": "INT-04",
@@ -674,7 +976,19 @@ window.COURSE_DATA = {
           "whyWrong": "CSV table dumps bypass business invariants, create stale batch windows, and couple all microservices to internal ERP table layouts."
         }
       },
-      "wisdomTakeaway": "Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer."
+      "wisdomTakeaway": "Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer.",
+      "sources": [
+        {
+          "title": "Anti-corruption Layer pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer"
+        },
+        {
+          "title": "Bounded Context",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/BoundedContext.html"
+        }
+      ]
     },
     {
       "id": "INT-05",
@@ -708,7 +1022,19 @@ window.COURSE_DATA = {
           "whyWrong": "Setting compatibility to `NONE` and deleting fields immediately crashes existing consumers deserializing either old historical events or new events."
         }
       },
-      "wisdomTakeaway": "In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old."
+      "wisdomTakeaway": "In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old.",
+      "sources": [
+        {
+          "title": "What do you mean by 'Event-Driven'?",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/articles/201701-event-driven.html"
+        },
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        }
+      ]
     },
     {
       "id": "INT-06",
@@ -742,7 +1068,19 @@ window.COURSE_DATA = {
           "whyWrong": "Orchestration actually sends command + reply messages through the coordinator (similar or slightly more hops than direct choreography); you choose orchestration for clarity and control, not fewer packets."
         }
       },
-      "wisdomTakeaway": "Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants."
+      "wisdomTakeaway": "Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants.",
+      "sources": [
+        {
+          "title": "Pattern: Saga",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/saga.html"
+        },
+        {
+          "title": "Enterprise Integration Patterns",
+          "author": "Gregor Hohpe & Bobby Woolf",
+          "url": "https://www.enterpriseintegrationpatterns.com/"
+        }
+      ]
     },
     {
       "id": "INT-07",
@@ -776,7 +1114,19 @@ window.COURSE_DATA = {
           "whyWrong": "HTTP/2 multiplexes TCP frames over one socket, which doesn't stop slow PDF work from holding every application worker thread on the shared pool."
         }
       },
-      "wisdomTakeaway": "Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads."
+      "wisdomTakeaway": "Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads.",
+      "sources": [
+        {
+          "title": "Bulkhead pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+        },
+        {
+          "title": "Timeouts, retries, and backoff with jitter",
+          "author": "Marc Brooker (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+        }
+      ]
     },
     {
       "id": "INT-08",
@@ -810,7 +1160,19 @@ window.COURSE_DATA = {
           "whyWrong": "0.8% of your customer base completely frozen for days is still a major incident, and you still lack a mechanism to recover the broken message."
         }
       },
-      "wisdomTakeaway": "Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay)."
+      "wisdomTakeaway": "Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay).",
+      "sources": [
+        {
+          "title": "Enterprise Integration Patterns",
+          "author": "Gregor Hohpe & Bobby Woolf",
+          "url": "https://www.enterpriseintegrationpatterns.com/"
+        },
+        {
+          "title": "Pattern: Transactional Outbox",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+        }
+      ]
     },
     {
       "id": "INT-09",
@@ -844,7 +1206,19 @@ window.COURSE_DATA = {
           "whyWrong": "14 services polling every 5 seconds wastes bandwidth, increases latency, and still hammers `ContentService`."
         }
       },
-      "wisdomTakeaway": "If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede."
+      "wisdomTakeaway": "If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede.",
+      "sources": [
+        {
+          "title": "What do you mean by 'Event-Driven'?",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/articles/201701-event-driven.html"
+        },
+        {
+          "title": "Enterprise Integration Patterns",
+          "author": "Gregor Hohpe & Bobby Woolf",
+          "url": "https://www.enterpriseintegrationpatterns.com/"
+        }
+      ]
     },
     {
       "id": "INT-10",
@@ -878,7 +1252,19 @@ window.COURSE_DATA = {
           "whyWrong": "5 staging environments multiply cloud cost and environment-drift maintenance while each individual 90-minute run still flakes 35% of the time."
         }
       },
-      "wisdomTakeaway": "Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck."
+      "wisdomTakeaway": "Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck.",
+      "sources": [
+        {
+          "title": "Consumer-Driven Contract Testing (Pact Docs)",
+          "author": "Pact Foundation",
+          "url": "https://docs.pact.io/"
+        },
+        {
+          "title": "Microservices",
+          "author": "James Lewis & Martin Fowler",
+          "url": "https://martinfowler.com/articles/microservices.html"
+        }
+      ]
     },
     {
       "id": "MOD-01",
@@ -912,7 +1298,24 @@ window.COURSE_DATA = {
           "whyWrong": "GraphQL Federation only simplifies client querying; backend feature changes still require 6 coordinated PRs and shared DB migrations."
         }
       },
-      "wisdomTakeaway": "If a single business change consistently requires synchronized releases across multiple services, you don't have microservices—you have a distributed monolith."
+      "wisdomTakeaway": "If a single business change consistently requires synchronized releases across multiple services, you don't have microservices—you have a distributed monolith.",
+      "sources": [
+        {
+          "title": "MonolithFirst",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+        },
+        {
+          "title": "Microservices",
+          "author": "James Lewis & Martin Fowler",
+          "url": "https://martinfowler.com/articles/microservices.html"
+        },
+        {
+          "title": "Decompose by Business Capability",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+        }
+      ]
     },
     {
       "id": "MOD-02",
@@ -946,7 +1349,19 @@ window.COURSE_DATA = {
           "whyWrong": "A Lambda function whose handler still entangles Stripe SDK, HTTP parsing, and pricing math has the exact same coupling problem—now with cold starts."
         }
       },
-      "wisdomTakeaway": "Your business logic should have zero idea whether it was invoked by HTTP, Kafka, or a CLI test—and zero idea whether data lives in Postgres or memory."
+      "wisdomTakeaway": "Your business logic should have zero idea whether it was invoked by HTTP, Kafka, or a CLI test—and zero idea whether data lives in Postgres or memory.",
+      "sources": [
+        {
+          "title": "Hexagonal Architecture (Ports and Adapters)",
+          "author": "Alistair Cockburn",
+          "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+        },
+        {
+          "title": "Bounded Context",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/BoundedContext.html"
+        }
+      ]
     },
     {
       "id": "MOD-03",
@@ -980,7 +1395,19 @@ window.COURSE_DATA = {
           "whyWrong": "DRY is valuable *within* a single cohesive concept (e.g., one authoritative tax calculation formula), just harmful when forcing artificial unification *across* bounded contexts."
         }
       },
-      "wisdomTakeaway": "A little duplication across bounded contexts is far cheaper than the wrong shared abstraction."
+      "wisdomTakeaway": "A little duplication across bounded contexts is far cheaper than the wrong shared abstraction.",
+      "sources": [
+        {
+          "title": "Bounded Context",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/BoundedContext.html"
+        },
+        {
+          "title": "Decompose by Business Capability",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+        }
+      ]
     },
     {
       "id": "MOD-04",
@@ -1014,7 +1441,14 @@ window.COURSE_DATA = {
           "whyWrong": "Short positional tuples invite silent transposition bugs (swapping `amount` and `user_id` if both are ints) and hurt readability across module borders."
         }
       },
-      "wisdomTakeaway": "Push module interfaces toward weak, static coupling (explicit types and names) and eliminate hidden execution-order assumptions."
+      "wisdomTakeaway": "Push module interfaces toward weak, static coupling (explicit types and names) and eliminate hidden execution-order assumptions.",
+      "sources": [
+        {
+          "title": "Connascence (Software Engineering)",
+          "author": "Meilir Page-Jones (via Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Connascence"
+        }
+      ]
     },
     {
       "id": "MOD-05",
@@ -1048,7 +1482,19 @@ window.COURSE_DATA = {
           "whyWrong": "Two codebases mutating overlapping legacy tables with different invariants corrupts financial state and makes rollback impossible."
         }
       },
-      "wisdomTakeaway": "Never bet the business on a big-bang cutover—strangle legacy systems one vertical slice at a time with instant rollback."
+      "wisdomTakeaway": "Never bet the business on a big-bang cutover—strangle legacy systems one vertical slice at a time with instant rollback.",
+      "sources": [
+        {
+          "title": "Strangler Fig Application",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+        },
+        {
+          "title": "Branch by Abstraction",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/BranchByAbstraction.html"
+        }
+      ]
     },
     {
       "id": "MOD-06",
@@ -1082,7 +1528,19 @@ window.COURSE_DATA = {
           "whyWrong": "Frontend validation is UX only; skipping backend validation opens security and data-corruption vulnerabilities."
         }
       },
-      "wisdomTakeaway": "Organize folders by business capability and use case, not by technical layer—optimize for how features actually change."
+      "wisdomTakeaway": "Organize folders by business capability and use case, not by technical layer—optimize for how features actually change.",
+      "sources": [
+        {
+          "title": "Decompose by Business Capability",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+        },
+        {
+          "title": "Connascence (Software Engineering)",
+          "author": "Meilir Page-Jones (via Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Connascence"
+        }
+      ]
     },
     {
       "id": "MOD-07",
@@ -1116,7 +1574,19 @@ window.COURSE_DATA = {
           "whyWrong": "Human approval queues kill velocity without giving instant local IDE/CI feedback."
         }
       },
-      "wisdomTakeaway": "Good intentions don't preserve modular boundaries—automated CI fitness functions do."
+      "wisdomTakeaway": "Good intentions don't preserve modular boundaries—automated CI fitness functions do.",
+      "sources": [
+        {
+          "title": "Fitness Function-Driven Development",
+          "author": "Thoughtworks",
+          "url": "https://www.thoughtworks.com/insights/articles/fitness-function-driven-development"
+        },
+        {
+          "title": "Hexagonal Architecture (Ports and Adapters)",
+          "author": "Alistair Cockburn",
+          "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+        }
+      ]
     },
     {
       "id": "MOD-08",
@@ -1150,7 +1620,19 @@ window.COURSE_DATA = {
           "whyWrong": "Serverless functions built by siloed UI/API/DB teams simply reproduce the same cross-team handoff bottlenecks."
         }
       },
-      "wisdomTakeaway": "Architecture and org design are two halves of one system—if your teams are sliced horizontally, your system will fight vertical modularity."
+      "wisdomTakeaway": "Architecture and org design are two halves of one system—if your teams are sliced horizontally, your system will fight vertical modularity.",
+      "sources": [
+        {
+          "title": "How Do Committees Invent? (Conway's Law, 1968)",
+          "author": "Melvin E. Conway",
+          "url": "https://www.melconway.com/Home/Conways_Law.html"
+        },
+        {
+          "title": "Decompose by Business Capability",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+        }
+      ]
     },
     {
       "id": "MOD-09",
@@ -1184,7 +1666,19 @@ window.COURSE_DATA = {
           "whyWrong": "Moving speculative base classes to another repo makes debugging and evolving them even more painful."
         }
       },
-      "wisdomTakeaway": "Duplication is cheap; the wrong abstraction is expensive. Abstract at real boundaries and real points of variation."
+      "wisdomTakeaway": "Duplication is cheap; the wrong abstraction is expensive. Abstract at real boundaries and real points of variation.",
+      "sources": [
+        {
+          "title": "MonolithFirst",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+        },
+        {
+          "title": "Connascence (Software Engineering)",
+          "author": "Meilir Page-Jones (via Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Connascence"
+        }
+      ]
     },
     {
       "id": "MOD-10",
@@ -1218,7 +1712,19 @@ window.COURSE_DATA = {
           "whyWrong": "Core releases stay blocked by tenant rules, and every new tenant grows conditional spaghetti inside shared business paths."
         }
       },
-      "wisdomTakeaway": "When core logic accumulates `if (customer == X)` branches, extract a stable Extension SPI and isolate custom behavior outside the core blast radius."
+      "wisdomTakeaway": "When core logic accumulates `if (customer == X)` branches, extract a stable Extension SPI and isolate custom behavior outside the core blast radius.",
+      "sources": [
+        {
+          "title": "Hexagonal Architecture (Ports and Adapters)",
+          "author": "Alistair Cockburn",
+          "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+        },
+        {
+          "title": "Bulkhead pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+        }
+      ]
     },
     {
       "id": "OPT-01",
@@ -1252,7 +1758,19 @@ window.COURSE_DATA = {
           "whyWrong": "Worker threads waiting on slow 2s socket I/O use near-zero CPU while completely blocking request intake."
         }
       },
-      "wisdomTakeaway": "Slow dependencies are deadlier than fast crashes: rising W multiplies concurrency L until every thread pool upstream suffocates."
+      "wisdomTakeaway": "Slow dependencies are deadlier than fast crashes: rising W multiplies concurrency L until every thread pool upstream suffocates.",
+      "sources": [
+        {
+          "title": "Little's Law (Operations Research, 1961)",
+          "author": "John D. C. Little (via Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+        },
+        {
+          "title": "Using load shedding to avoid overload",
+          "author": "David Yanacek (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+        }
+      ]
     },
     {
       "id": "OPT-02",
@@ -1286,7 +1804,14 @@ window.COURSE_DATA = {
           "whyWrong": "A 10ms timeout drops valid shards routinely, degrading search relevance and user trust."
         }
       },
-      "wisdomTakeaway": "At scale, the average doesn't matter—when fanning out across N components, everyone experiences the tail."
+      "wisdomTakeaway": "At scale, the average doesn't matter—when fanning out across N components, everyone experiences the tail.",
+      "sources": [
+        {
+          "title": "The Tail at Scale (CACM, 2013)",
+          "author": "Jeffrey Dean & Luiz André Barroso (Google)",
+          "url": "https://research.google/pubs/the-tail-at-scale/"
+        }
+      ]
     },
     {
       "id": "OPT-03",
@@ -1320,7 +1845,14 @@ window.COURSE_DATA = {
           "whyWrong": "Raising `max_connections` to 10,000 and doubling pods makes lock contention and RAM exhaustion (each Postgres backend consumes several MB) catastrophically worse."
         }
       },
-      "wisdomTakeaway": "More database connections almost never equal more database throughput—a 16-core DB runs fastest with dozens of active connections, not thousands."
+      "wisdomTakeaway": "More database connections almost never equal more database throughput—a 16-core DB runs fastest with dozens of active connections, not thousands.",
+      "sources": [
+        {
+          "title": "About Pool Sizing",
+          "author": "Brett Wooldridge (HikariCP Wiki)",
+          "url": "https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"
+        }
+      ]
     },
     {
       "id": "OPT-04",
@@ -1354,7 +1886,19 @@ window.COURSE_DATA = {
           "whyWrong": "All 5 Redis replicas expire the same key at the exact same second and still forward 15,000 misses to Postgres."
         }
       },
-      "wisdomTakeaway": "Never let 10,000 concurrent cache misses each independently ask the database the exact same question—coalesce with Singleflight or refresh before expiry."
+      "wisdomTakeaway": "Never let 10,000 concurrent cache misses each independently ask the database the exact same question—coalesce with Singleflight or refresh before expiry.",
+      "sources": [
+        {
+          "title": "Optimal Probabilistic Cache Stampede Prevention (XFetch)",
+          "author": "Vattani, Chierichetti & Lowenstein (2015)",
+          "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+        },
+        {
+          "title": "Cache-Aside pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+        }
+      ]
     },
     {
       "id": "OPT-05",
@@ -1388,7 +1932,19 @@ window.COURSE_DATA = {
           "whyWrong": "Fetching 1,000 rows on initial page load wastes bandwidth, memory, and DB I/O when users typically read only the first 20 items."
         }
       },
-      "wisdomTakeaway": "For feeds, logs, and APIs over large datasets, `OFFSET` is a ticking latency bomb—default to cursor/keyset pagination."
+      "wisdomTakeaway": "For feeds, logs, and APIs over large datasets, `OFFSET` is a ticking latency bomb—default to cursor/keyset pagination.",
+      "sources": [
+        {
+          "title": "We Need Tooling for Keyset Pagination (No Offset)",
+          "author": "Markus Winand (Use The Index, Luke)",
+          "url": "https://use-the-index-luke.com/no-offset"
+        },
+        {
+          "title": "Concatenated Indexes (Leftmost Prefix Rule)",
+          "author": "Markus Winand (Use The Index, Luke)",
+          "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+        }
+      ]
     },
     {
       "id": "OPT-06",
@@ -1422,7 +1978,19 @@ window.COURSE_DATA = {
           "whyWrong": "In PostgreSQL `VARCHAR` and `TEXT` share the exact same underlying varlena storage and B-Tree mechanics."
         }
       },
-      "wisdomTakeaway": "Design composite indexes like phone books: equality columns first, range/sort columns next, and `INCLUDE` payload columns to eliminate table heap hops."
+      "wisdomTakeaway": "Design composite indexes like phone books: equality columns first, range/sort columns next, and `INCLUDE` payload columns to eliminate table heap hops.",
+      "sources": [
+        {
+          "title": "Concatenated Indexes (Leftmost Prefix Rule)",
+          "author": "Markus Winand (Use The Index, Luke)",
+          "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+        },
+        {
+          "title": "Index-Only Scan / Covering Indexes",
+          "author": "Markus Winand (Use The Index, Luke)",
+          "url": "https://use-the-index-luke.com/sql/clustering/index-only-scan-covering-index"
+        }
+      ]
     },
     {
       "id": "OPT-07",
@@ -1456,7 +2024,19 @@ window.COURSE_DATA = {
           "whyWrong": "Even if each SQL query ran in 0.1ms on 64 cores, 160 sequential network round trips over TCP still burn hundreds of milliseconds."
         }
       },
-      "wisdomTakeaway": "Never optimize by intuition: look at a trace/flamegraph first, and crush network round trips (N+1s) before touching micro-benchmarks."
+      "wisdomTakeaway": "Never optimize by intuition: look at a trace/flamegraph first, and crush network round trips (N+1s) before touching micro-benchmarks.",
+      "sources": [
+        {
+          "title": "The USE Method",
+          "author": "Brendan Gregg",
+          "url": "https://www.brendangregg.com/usemethod.html"
+        },
+        {
+          "title": "The RED Method: How to Instrument Your Services",
+          "author": "Tom Wilkie (Grafana Labs)",
+          "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+        }
+      ]
     },
     {
       "id": "OPT-08",
@@ -1490,7 +2070,19 @@ window.COURSE_DATA = {
           "whyWrong": "AOF `fsync=always` slows down Redis writes and has zero effect on read-miss penetration."
         }
       },
-      "wisdomTakeaway": "Your cache must protect the database from 'not found' floods too—validate shapes early, negative-cache misses briefly, or filter with a Bloom filter."
+      "wisdomTakeaway": "Your cache must protect the database from 'not found' floods too—validate shapes early, negative-cache misses briefly, or filter with a Bloom filter.",
+      "sources": [
+        {
+          "title": "Cache-Aside pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+        },
+        {
+          "title": "Optimal Probabilistic Cache Stampede Prevention (XFetch)",
+          "author": "Vattani, Chierichetti & Lowenstein (2015)",
+          "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+        }
+      ]
     },
     {
       "id": "OPT-09",
@@ -1524,7 +2116,19 @@ window.COURSE_DATA = {
           "whyWrong": "Wrapping synchronous CPU code in `async/await` or `Promise.all` still executes sequentially on the single main JS thread."
         }
       },
-      "wisdomTakeaway": "Event-loop architectures scale I/O concurrency brilliantly and collapse catastrophically the moment someone puts synchronous CPU work on the loop."
+      "wisdomTakeaway": "Event-loop architectures scale I/O concurrency brilliantly and collapse catastrophically the moment someone puts synchronous CPU work on the loop.",
+      "sources": [
+        {
+          "title": "The USE Method",
+          "author": "Brendan Gregg",
+          "url": "https://www.brendangregg.com/usemethod.html"
+        },
+        {
+          "title": "The RED Method: How to Instrument Your Services",
+          "author": "Tom Wilkie (Grafana Labs)",
+          "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+        }
+      ]
     },
     {
       "id": "OPT-10",
@@ -1558,7 +2162,19 @@ window.COURSE_DATA = {
           "whyWrong": "Creating 50,000 tiny files/sec on NFS obliterates filesystem metadata ops and makes querying impossible."
         }
       },
-      "wisdomTakeaway": "When write IOPS or network RTT bottlenecks ingestion, micro-batch with a tight `(max_count, max_wait_ms)` bound to trade milliseconds for orders-of-magnitude throughput."
+      "wisdomTakeaway": "When write IOPS or network RTT bottlenecks ingestion, micro-batch with a tight `(max_count, max_wait_ms)` bound to trade milliseconds for orders-of-magnitude throughput.",
+      "sources": [
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        },
+        {
+          "title": "About Pool Sizing",
+          "author": "Brett Wooldridge (HikariCP Wiki)",
+          "url": "https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"
+        }
+      ]
     },
     {
       "id": "SCA-01",
@@ -1592,7 +2208,19 @@ window.COURSE_DATA = {
           "whyWrong": "Powers of two are standard in consistent hashing and memory alignment and do not trigger quadratic collision spikes."
         }
       },
-      "wisdomTakeaway": "If adding nodes makes your cluster slower, you have a coherency tax (`beta > 0`)—stop adding machines and remove the global cross-node coordination."
+      "wisdomTakeaway": "If adding nodes makes your cluster slower, you have a coherency tax (`beta > 0`)—stop adding machines and remove the global cross-node coordination.",
+      "sources": [
+        {
+          "title": "A General Theory of Computational Scalability Based on Rational Functions (USL)",
+          "author": "Neil J. Gunther (arXiv:0808.1431)",
+          "url": "https://arxiv.org/abs/0808.1431"
+        },
+        {
+          "title": "Amdahl's Law (AFIPS 1967)",
+          "author": "Gene Amdahl (via Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+        }
+      ]
     },
     {
       "id": "SCA-02",
@@ -1626,7 +2254,19 @@ window.COURSE_DATA = {
           "whyWrong": "Virtual nodes balance key ranges across physical servers; a single key (`MegaCorp`) still maps to only one vnode on one physical server at a time."
         }
       },
-      "wisdomTakeaway": "Uniform hashing only balances keys, never skew—design shard keys for cardinality AND volume distribution, especially with enterprise whales."
+      "wisdomTakeaway": "Uniform hashing only balances keys, never skew—design shard keys for cardinality AND volume distribution, especially with enterprise whales.",
+      "sources": [
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        },
+        {
+          "title": "Consistent Hashing and Random Trees (STOC 1997)",
+          "author": "David Karger et al. (MIT / Princeton CS)",
+          "url": "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf"
+        }
+      ]
     },
     {
       "id": "SCA-03",
@@ -1660,7 +2300,14 @@ window.COURSE_DATA = {
           "whyWrong": "`sha256(key) % 9` still remaps ~90% of keys compared to `sha256(key) % 10`."
         }
       },
-      "wisdomTakeaway": "Never use `hash(key) % N` for stateful partitions or caches where N can change—use consistent hashing with virtual nodes."
+      "wisdomTakeaway": "Never use `hash(key) % N` for stateful partitions or caches where N can change—use consistent hashing with virtual nodes.",
+      "sources": [
+        {
+          "title": "Consistent Hashing and Random Trees (STOC 1997)",
+          "author": "David Karger et al. (MIT / Princeton CS)",
+          "url": "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf"
+        }
+      ]
     },
     {
       "id": "SCA-04",
@@ -1694,7 +2341,14 @@ window.COURSE_DATA = {
           "whyWrong": "Forcing every user to stare at a 5-second spinner feels broken and still fails whenever replication lag exceeds 5 seconds."
         }
       },
-      "wisdomTakeaway": "Don't make the whole database synchronous just for Read-Your-Writes—pin the mutating user's session to the primary or track their commit LSN."
+      "wisdomTakeaway": "Don't make the whole database synchronous just for Read-Your-Writes—pin the mutating user's session to the primary or track their commit LSN.",
+      "sources": [
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        }
+      ]
     },
     {
       "id": "SCA-05",
@@ -1728,7 +2382,19 @@ window.COURSE_DATA = {
           "whyWrong": "Immediate retries during overload amplify traffic into total collapse."
         }
       },
-      "wisdomTakeaway": "Under extreme overload, failing fast for excess low-priority load is the only way to keep critical paths fast and alive."
+      "wisdomTakeaway": "Under extreme overload, failing fast for excess low-priority load is the only way to keep critical paths fast and alive.",
+      "sources": [
+        {
+          "title": "Using load shedding to avoid overload",
+          "author": "David Yanacek (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+        },
+        {
+          "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+          "author": "Bronson, Aghayev, Charapko & Zhu",
+          "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+        }
+      ]
     },
     {
       "id": "SCA-06",
@@ -1762,7 +2428,19 @@ window.COURSE_DATA = {
           "whyWrong": "30 independent in-memory HashMaps let an attacker send `30 * 100 = 3,000` requests/min under round-robin load balancing."
         }
       },
-      "wisdomTakeaway": "Never use uncoordinated per-pod counters or naive fixed windows for strict rate limits—use atomic Token Bucket or Sliding Window limiters."
+      "wisdomTakeaway": "Never use uncoordinated per-pod counters or naive fixed windows for strict rate limits—use atomic Token Bucket or Sliding Window limiters.",
+      "sources": [
+        {
+          "title": "Scaling your API with rate limiters",
+          "author": "Paul Tarjan (Stripe Engineering)",
+          "url": "https://stripe.com/blog/rate-limiters"
+        },
+        {
+          "title": "Rate Limiting Algorithms",
+          "author": "Redis Glossary",
+          "url": "https://redis.io/glossary/rate-limiting/"
+        }
+      ]
     },
     {
       "id": "SCA-07",
@@ -1796,7 +2474,24 @@ window.COURSE_DATA = {
           "whyWrong": "Elasticsearch lacks multi-row ACID transactions, foreign keys, and strict durable isolation needed for payment/inventory invariants."
         }
       },
-      "wisdomTakeaway": "When search/analytics queries start hurting transactional writes, don't overload OLTP with 20 indexes—project an async CQRS read model."
+      "wisdomTakeaway": "When search/analytics queries start hurting transactional writes, don't overload OLTP with 20 indexes—project an async CQRS read model.",
+      "sources": [
+        {
+          "title": "CQRS pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs"
+        },
+        {
+          "title": "Pattern: Transactional Outbox",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+        },
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        }
+      ]
     },
     {
       "id": "SCA-08",
@@ -1830,7 +2525,14 @@ window.COURSE_DATA = {
           "whyWrong": "Static CDN assets don't fix 200ms dynamic API round trips to US-East or keep EU user data inside the EU."
         }
       },
-      "wisdomTakeaway": "Prefer home-region cellular isolation over global multi-master write complexity—respect both the speed of light and GDPR."
+      "wisdomTakeaway": "Prefer home-region cellular isolation over global multi-master write complexity—respect both the speed of light and GDPR.",
+      "sources": [
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        }
+      ]
     },
     {
       "id": "SCA-09",
@@ -1864,7 +2566,19 @@ window.COURSE_DATA = {
           "whyWrong": "Login traffic spikes CPU, memory, and connections—disk usage barely moves during authentication bursts."
         }
       },
-      "wisdomTakeaway": "Reactive auto-scaling handles gradual diurnal curves, never vertical 9:00 AM cliff spikes—pre-warm predictably and design fast startup."
+      "wisdomTakeaway": "Reactive auto-scaling handles gradual diurnal curves, never vertical 9:00 AM cliff spikes—pre-warm predictably and design fast startup.",
+      "sources": [
+        {
+          "title": "Using load shedding to avoid overload",
+          "author": "David Yanacek (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+        },
+        {
+          "title": "The USE Method",
+          "author": "Brendan Gregg",
+          "url": "https://www.brendangregg.com/usemethod.html"
+        }
+      ]
     },
     {
       "id": "SCA-10",
@@ -1898,7 +2612,19 @@ window.COURSE_DATA = {
           "whyWrong": "5,000 concurrent video transcodes on one pod immediately exhaust both RAM and CPU cores."
         }
       },
-      "wisdomTakeaway": "An unbounded queue is just a delayed OOM crash; every buffer must be bounded, durable if critical, and capable of signaling backpressure."
+      "wisdomTakeaway": "An unbounded queue is just a delayed OOM crash; every buffer must be bounded, durable if critical, and capable of signaling backpressure.",
+      "sources": [
+        {
+          "title": "Using load shedding to avoid overload",
+          "author": "David Yanacek (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+        },
+        {
+          "title": "Bulkhead pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+        }
+      ]
     },
     {
       "id": "CAP-01",
@@ -1932,7 +2658,19 @@ window.COURSE_DATA = {
           "whyWrong": "GraphQL provides typed schemas, not atomic transactional stock reservation."
         }
       },
-      "wisdomTakeaway": "Know which invariants MUST be strongly consistent synchronously (money, scarce inventory) and which can be eventual (emails, search, analytics)."
+      "wisdomTakeaway": "Know which invariants MUST be strongly consistent synchronously (money, scarce inventory) and which can be eventual (emails, search, analytics).",
+      "sources": [
+        {
+          "title": "Pattern: Transactional Outbox",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+        },
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        }
+      ]
     },
     {
       "id": "CAP-02",
@@ -1966,7 +2704,19 @@ window.COURSE_DATA = {
           "whyWrong": "Disabling timeouts turns every minor downstream hiccup into complete thread-pool starvation across the platform."
         }
       },
-      "wisdomTakeaway": "Every network hop you add taxes latency, availability, and debuggability—only cross the network when the autonomy payoff genuinely exceeds the distributed tax."
+      "wisdomTakeaway": "Every network hop you add taxes latency, availability, and debuggability—only cross the network when the autonomy payoff genuinely exceeds the distributed tax.",
+      "sources": [
+        {
+          "title": "MonolithFirst",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+        },
+        {
+          "title": "The Tail at Scale (CACM, 2013)",
+          "author": "Jeffrey Dean & Luiz André Barroso (Google)",
+          "url": "https://research.google/pubs/the-tail-at-scale/"
+        }
+      ]
     },
     {
       "id": "CAP-03",
@@ -2000,7 +2750,24 @@ window.COURSE_DATA = {
           "whyWrong": "Flushing Redis forces 100% of reads onto the already-collapsed database."
         }
       },
-      "wisdomTakeaway": "In a metastable outage, waiting it out fails—you must actively shed load and halt retries to drop utilization below the recovery threshold."
+      "wisdomTakeaway": "In a metastable outage, waiting it out fails—you must actively shed load and halt retries to drop utilization below the recovery threshold.",
+      "sources": [
+        {
+          "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+          "author": "Bronson, Aghayev, Charapko & Zhu",
+          "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+        },
+        {
+          "title": "Using load shedding to avoid overload",
+          "author": "David Yanacek (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+        },
+        {
+          "title": "Exponential Backoff And Jitter",
+          "author": "Marc Brooker (AWS Architecture Blog)",
+          "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+        }
+      ]
     },
     {
       "id": "CAP-04",
@@ -2034,7 +2801,19 @@ window.COURSE_DATA = {
           "whyWrong": "Deleting legacy columns breaks 18 active monolith paths immediately."
         }
       },
-      "wisdomTakeaway": "Migrate data-heavy modules in four safe beats: Backfill + Live Sync -> Shadow Read Parity -> Cutover Reads -> Cutover Writes."
+      "wisdomTakeaway": "Migrate data-heavy modules in four safe beats: Backfill + Live Sync -> Shadow Read Parity -> Cutover Reads -> Cutover Writes.",
+      "sources": [
+        {
+          "title": "Strangler Fig Application",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+        },
+        {
+          "title": "Pattern: Transactional Outbox",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+        }
+      ]
     },
     {
       "id": "CAP-05",
@@ -2068,7 +2847,24 @@ window.COURSE_DATA = {
           "whyWrong": "Turning off Redis would overload the healthy DB on top of the ML outage."
         }
       },
-      "wisdomTakeaway": "Always build graceful degradation fallbacks for non-critical enrichments (recommendations, avatars, badges)—never let an ML sidecar take down your core feed."
+      "wisdomTakeaway": "Always build graceful degradation fallbacks for non-critical enrichments (recommendations, avatars, badges)—never let an ML sidecar take down your core feed.",
+      "sources": [
+        {
+          "title": "Circuit Breaker pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+        },
+        {
+          "title": "Bulkhead pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+        },
+        {
+          "title": "The RED Method: How to Instrument Your Services",
+          "author": "Tom Wilkie (Grafana Labs)",
+          "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+        }
+      ]
     },
     {
       "id": "CAP-06",
@@ -2102,7 +2898,19 @@ window.COURSE_DATA = {
           "whyWrong": "Blindly overwriting status lets late `out_for_delivery` events falsely tell customers their already-delivered package isn't delivered."
         }
       },
-      "wisdomTakeaway": "Never trust external webhooks to arrive once or in order—ack fast, deduplicate atomically, and guard state transitions monotonically."
+      "wisdomTakeaway": "Never trust external webhooks to arrive once or in order—ack fast, deduplicate atomically, and guard state transitions monotonically.",
+      "sources": [
+        {
+          "title": "Designing robust and predictable APIs with idempotency",
+          "author": "Brandur Leach (Stripe Engineering)",
+          "url": "https://stripe.com/blog/idempotency"
+        },
+        {
+          "title": "Enterprise Integration Patterns",
+          "author": "Gregor Hohpe & Bobby Woolf",
+          "url": "https://www.enterpriseintegrationpatterns.com/"
+        }
+      ]
     },
     {
       "id": "CAP-07",
@@ -2136,7 +2944,19 @@ window.COURSE_DATA = {
           "whyWrong": "Rejecting microservices does NOT mean abandoning modularity—a Modular Monolith gives clean boundaries with zero network tax."
         }
       },
-      "wisdomTakeaway": "Don't solve 10-million-QPS problems for a 150-QPS system; earn your distributed complexity one real bottleneck at a time."
+      "wisdomTakeaway": "Don't solve 10-million-QPS problems for a 150-QPS system; earn your distributed complexity one real bottleneck at a time.",
+      "sources": [
+        {
+          "title": "MonolithFirst",
+          "author": "Martin Fowler",
+          "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+        },
+        {
+          "title": "Microservices",
+          "author": "James Lewis & Martin Fowler",
+          "url": "https://martinfowler.com/articles/microservices.html"
+        }
+      ]
     },
     {
       "id": "CAP-08",
@@ -2170,7 +2990,24 @@ window.COURSE_DATA = {
           "whyWrong": "1,000 Lambdas x 10 retries hits the vendor even harder and triggers immediate key revocation."
         }
       },
-      "wisdomTakeaway": "Always isolate priority lanes (OTPs vs bulk marketing) and pace outbound calls to external rate-limited vendors via queued leaky buckets."
+      "wisdomTakeaway": "Always isolate priority lanes (OTPs vs bulk marketing) and pace outbound calls to external rate-limited vendors via queued leaky buckets.",
+      "sources": [
+        {
+          "title": "Scaling your API with rate limiters",
+          "author": "Paul Tarjan (Stripe Engineering)",
+          "url": "https://stripe.com/blog/rate-limiters"
+        },
+        {
+          "title": "Bulkhead pattern",
+          "author": "Microsoft Azure Architecture Center",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+        },
+        {
+          "title": "Timeouts, retries, and backoff with jitter",
+          "author": "Marc Brooker (AWS Builders' Library)",
+          "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+        }
+      ]
     },
     {
       "id": "CAP-09",
@@ -2204,7 +3041,19 @@ window.COURSE_DATA = {
           "whyWrong": "Indexing `likes_count` forces extra index-entry churn on every tap while doing zero to relieve the single-row exclusive lock."
         }
       },
-      "wisdomTakeaway": "Single-row counters serialize writes completely—either batch increments before writing or shard the counter across N buckets."
+      "wisdomTakeaway": "Single-row counters serialize writes completely—either batch increments before writing or shard the counter across N buckets.",
+      "sources": [
+        {
+          "title": "Designing Data-Intensive Applications",
+          "author": "Martin Kleppmann",
+          "url": "https://dataintensive.net/"
+        },
+        {
+          "title": "Amdahl's Law (AFIPS 1967)",
+          "author": "Gene Amdahl (via Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+        }
+      ]
     },
     {
       "id": "CAP-10",
@@ -2238,7 +3087,24 @@ window.COURSE_DATA = {
           "whyWrong": "Kafka isn't designed for random-access ACID balance checks and point-in-time relational queries."
         }
       },
-      "wisdomTakeaway": "Great RFC reviews rank risks ruthlessly: stop data corruption and cascading outages first, remove cross-boundary DB coupling second, and leave clean seams for 10x scale."
+      "wisdomTakeaway": "Great RFC reviews rank risks ruthlessly: stop data corruption and cascading outages first, remove cross-boundary DB coupling second, and leave clean seams for 10x scale.",
+      "sources": [
+        {
+          "title": "Pattern: Transactional Outbox",
+          "author": "Chris Richardson (microservices.io)",
+          "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+        },
+        {
+          "title": "Exponential Backoff And Jitter",
+          "author": "Marc Brooker (AWS Architecture Blog)",
+          "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+        },
+        {
+          "title": "Fitness Function-Driven Development",
+          "author": "Thoughtworks",
+          "url": "https://www.thoughtworks.com/insights/articles/fitness-function-driven-development"
+        }
+      ]
     }
   ]
 };

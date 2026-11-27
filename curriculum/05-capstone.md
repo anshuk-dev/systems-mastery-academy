@@ -38,4 +38,11 @@ Real engineering problems never arrive labeled 'This is a Scalability question'.
 
 > **Rule of Thumb:** Optimize for reversibility, debuggability at 2 AM, and alignment with team topology—not diagram elegance.
 
+### Verified Primary Sources
+
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) — Martin Fowler
+- [Metastable Failures in Distributed Systems (HotOS 2021)](https://charap.co/metastable-failures-in-distributed-systems/) — Bronson, Aghayev, Charapko & Zhu
+- [The Tail at Scale (CACM, 2013)](https://research.google/pubs/the-tail-at-scale/) — Jeffrey Dean & Luiz André Barroso (Google)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+
 ---

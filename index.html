@@ -3,47 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Systems Mastery Academy — Integration, Modularity, Optimization &amp; Scalability</title>
-  <meta name="description" content="Principal-level interactive course and distractor-analysis Q&A lab for System Integration, Modular Architecture, System Optimization, and System Scalability." />
+  <meta name="theme-color" content="#F7F6F2" id="meta-theme-color" />
+  <title>Systems Mastery — Monograph &amp; Distractor Lab</title>
+  <meta name="description" content="Source-verified systems engineering curriculum and distractor-analysis Q&A lab covering System Integration, Modular Architecture, System Optimization, and System Scalability." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand" id="brand-home" role="button" tabindex="0">
-        <div class="brand-badge">SM</div>
-        <div>
-          <div class="brand-title">Systems Mastery Academy</div>
-          <div class="brand-sub">Knowledge &amp; Architectural Wisdom Lab</div>
-        </div>
-      </div>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
 
-      <nav class="nav-tabs" aria-label="Primary navigation">
-        <button class="nav-tab active" data-view="overview">Overview</button>
-        <button class="nav-tab" data-view="course">Course Modules</button>
-        <button class="nav-tab" data-view="quiz">Q&amp;A + Distractor Lab</button>
-        <button class="nav-tab" data-view="tools">Laws &amp; Calculators</button>
-      </nav>
+  <div class="site-frame">
+    <header class="masthead">
+      <div class="masthead-inner">
+        <a href="#view=overview" class="wordmark" id="brand-home">
+          <span class="wordmark-mark" aria-hidden="true">§</span>
+          <span class="wordmark-text">
+            <strong>Systems Mastery</strong>
+            <span>Architecture Field Manual</span>
+          </span>
+        </a>
 
-      <div class="topbar-actions">
-        <div class="progress-pill" id="global-progress-pill" title="Overall mastery progress">
-          <span class="dot"></span>
-          <span id="progress-summary-text">0% Mastery</span>
+        <nav class="primary-nav" aria-label="Primary sections">
+          <button type="button" class="nav-link active" data-view="overview">Index</button>
+          <button type="button" class="nav-link" data-view="course">Curriculum</button>
+          <button type="button" class="nav-link" data-view="quiz">Distractor Lab</button>
+          <button type="button" class="nav-link" data-view="tools">Laws &amp; Math</button>
+          <button type="button" class="nav-link" data-view="sources">Primary Sources</button>
+        </nav>
+
+        <div class="masthead-meta">
+          <span class="mastery-readout" id="progress-summary-text" aria-live="polite">0% mastery</span>
+          <button type="button" class="theme-btn" id="theme-toggle" aria-label="Switch to dark slate theme">Slate theme</button>
         </div>
-        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle light or dark theme" title="Toggle theme">
-          Theme
-        </button>
       </div>
     </header>
 
-    <main id="main-content" class="main-content"></main>
+    <main id="main-content" class="page-main" tabindex="-1"></main>
 
-    <footer class="footer">
-      <div>Systems Mastery Academy &mdash; 5 Pillars &bull; 13 Deep Lessons &bull; 50 Scenario Q&amp;As &bull; 150 Distractor Analyses</div>
-      <div class="footer-links">
-        <a href="curriculum/01-integration.md" target="_blank" rel="noopener">Markdown Curriculum</a>
-        <a href="assessments/01-integration-qa.md" target="_blank" rel="noopener">Markdown Q&amp;A Bank</a>
-        <a href="https://github.com/anshuk-dev/systems-mastery-academy" target="_blank" rel="noopener">GitHub Repo</a>
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <p class="footer-note">
+          Grounded in 40 verified primary papers &amp; engineering monographs &bull; Built with editorial typography from <code>anthropics/skills</code> &amp; accessibility standards from <code>vercel-labs/agent-skills</code>.
+        </p>
+        <div class="footer-links">
+          <a href="curriculum/01-integration.md" target="_blank" rel="noopener">Markdown Modules</a>
+          <a href="assessments/01-integration-qa.md" target="_blank" rel="noopener">Markdown Q&amp;A</a>
+          <a href="https://github.com/anshuk-dev/systems-mastery-academy" target="_blank" rel="noopener">GitHub Repo</a>
+        </div>
       </div>
     </footer>
   </div>

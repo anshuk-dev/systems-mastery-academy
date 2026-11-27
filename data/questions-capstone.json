@@ -31,7 +31,19 @@
         "whyWrong": "GraphQL provides typed schemas, not atomic transactional stock reservation."
       }
     },
-    "wisdomTakeaway": "Know which invariants MUST be strongly consistent synchronously (money, scarce inventory) and which can be eventual (emails, search, analytics)."
+    "wisdomTakeaway": "Know which invariants MUST be strongly consistent synchronously (money, scarce inventory) and which can be eventual (emails, search, analytics).",
+    "sources": [
+      {
+        "title": "Pattern: Transactional Outbox",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+      },
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      }
+    ]
   },
   {
     "id": "CAP-02",
@@ -65,7 +77,19 @@
         "whyWrong": "Disabling timeouts turns every minor downstream hiccup into complete thread-pool starvation across the platform."
       }
     },
-    "wisdomTakeaway": "Every network hop you add taxes latency, availability, and debuggability—only cross the network when the autonomy payoff genuinely exceeds the distributed tax."
+    "wisdomTakeaway": "Every network hop you add taxes latency, availability, and debuggability—only cross the network when the autonomy payoff genuinely exceeds the distributed tax.",
+    "sources": [
+      {
+        "title": "MonolithFirst",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+      },
+      {
+        "title": "The Tail at Scale (CACM, 2013)",
+        "author": "Jeffrey Dean & Luiz André Barroso (Google)",
+        "url": "https://research.google/pubs/the-tail-at-scale/"
+      }
+    ]
   },
   {
     "id": "CAP-03",
@@ -99,7 +123,24 @@
         "whyWrong": "Flushing Redis forces 100% of reads onto the already-collapsed database."
       }
     },
-    "wisdomTakeaway": "In a metastable outage, waiting it out fails—you must actively shed load and halt retries to drop utilization below the recovery threshold."
+    "wisdomTakeaway": "In a metastable outage, waiting it out fails—you must actively shed load and halt retries to drop utilization below the recovery threshold.",
+    "sources": [
+      {
+        "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+        "author": "Bronson, Aghayev, Charapko & Zhu",
+        "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+      },
+      {
+        "title": "Using load shedding to avoid overload",
+        "author": "David Yanacek (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+      },
+      {
+        "title": "Exponential Backoff And Jitter",
+        "author": "Marc Brooker (AWS Architecture Blog)",
+        "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+      }
+    ]
   },
   {
     "id": "CAP-04",
@@ -133,7 +174,19 @@
         "whyWrong": "Deleting legacy columns breaks 18 active monolith paths immediately."
       }
     },
-    "wisdomTakeaway": "Migrate data-heavy modules in four safe beats: Backfill + Live Sync -> Shadow Read Parity -> Cutover Reads -> Cutover Writes."
+    "wisdomTakeaway": "Migrate data-heavy modules in four safe beats: Backfill + Live Sync -> Shadow Read Parity -> Cutover Reads -> Cutover Writes.",
+    "sources": [
+      {
+        "title": "Strangler Fig Application",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+      },
+      {
+        "title": "Pattern: Transactional Outbox",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+      }
+    ]
   },
   {
     "id": "CAP-05",
@@ -167,7 +220,24 @@
         "whyWrong": "Turning off Redis would overload the healthy DB on top of the ML outage."
       }
     },
-    "wisdomTakeaway": "Always build graceful degradation fallbacks for non-critical enrichments (recommendations, avatars, badges)—never let an ML sidecar take down your core feed."
+    "wisdomTakeaway": "Always build graceful degradation fallbacks for non-critical enrichments (recommendations, avatars, badges)—never let an ML sidecar take down your core feed.",
+    "sources": [
+      {
+        "title": "Circuit Breaker pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+      },
+      {
+        "title": "Bulkhead pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+      },
+      {
+        "title": "The RED Method: How to Instrument Your Services",
+        "author": "Tom Wilkie (Grafana Labs)",
+        "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+      }
+    ]
   },
   {
     "id": "CAP-06",
@@ -201,7 +271,19 @@
         "whyWrong": "Blindly overwriting status lets late `out_for_delivery` events falsely tell customers their already-delivered package isn't delivered."
       }
     },
-    "wisdomTakeaway": "Never trust external webhooks to arrive once or in order—ack fast, deduplicate atomically, and guard state transitions monotonically."
+    "wisdomTakeaway": "Never trust external webhooks to arrive once or in order—ack fast, deduplicate atomically, and guard state transitions monotonically.",
+    "sources": [
+      {
+        "title": "Designing robust and predictable APIs with idempotency",
+        "author": "Brandur Leach (Stripe Engineering)",
+        "url": "https://stripe.com/blog/idempotency"
+      },
+      {
+        "title": "Enterprise Integration Patterns",
+        "author": "Gregor Hohpe & Bobby Woolf",
+        "url": "https://www.enterpriseintegrationpatterns.com/"
+      }
+    ]
   },
   {
     "id": "CAP-07",
@@ -235,7 +317,19 @@
         "whyWrong": "Rejecting microservices does NOT mean abandoning modularity—a Modular Monolith gives clean boundaries with zero network tax."
       }
     },
-    "wisdomTakeaway": "Don't solve 10-million-QPS problems for a 150-QPS system; earn your distributed complexity one real bottleneck at a time."
+    "wisdomTakeaway": "Don't solve 10-million-QPS problems for a 150-QPS system; earn your distributed complexity one real bottleneck at a time.",
+    "sources": [
+      {
+        "title": "MonolithFirst",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+      },
+      {
+        "title": "Microservices",
+        "author": "James Lewis & Martin Fowler",
+        "url": "https://martinfowler.com/articles/microservices.html"
+      }
+    ]
   },
   {
     "id": "CAP-08",
@@ -269,7 +363,24 @@
         "whyWrong": "1,000 Lambdas x 10 retries hits the vendor even harder and triggers immediate key revocation."
       }
     },
-    "wisdomTakeaway": "Always isolate priority lanes (OTPs vs bulk marketing) and pace outbound calls to external rate-limited vendors via queued leaky buckets."
+    "wisdomTakeaway": "Always isolate priority lanes (OTPs vs bulk marketing) and pace outbound calls to external rate-limited vendors via queued leaky buckets.",
+    "sources": [
+      {
+        "title": "Scaling your API with rate limiters",
+        "author": "Paul Tarjan (Stripe Engineering)",
+        "url": "https://stripe.com/blog/rate-limiters"
+      },
+      {
+        "title": "Bulkhead pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+      },
+      {
+        "title": "Timeouts, retries, and backoff with jitter",
+        "author": "Marc Brooker (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+      }
+    ]
   },
   {
     "id": "CAP-09",
@@ -303,7 +414,19 @@
         "whyWrong": "Indexing `likes_count` forces extra index-entry churn on every tap while doing zero to relieve the single-row exclusive lock."
       }
     },
-    "wisdomTakeaway": "Single-row counters serialize writes completely—either batch increments before writing or shard the counter across N buckets."
+    "wisdomTakeaway": "Single-row counters serialize writes completely—either batch increments before writing or shard the counter across N buckets.",
+    "sources": [
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      },
+      {
+        "title": "Amdahl's Law (AFIPS 1967)",
+        "author": "Gene Amdahl (via Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+      }
+    ]
   },
   {
     "id": "CAP-10",
@@ -337,6 +460,23 @@
         "whyWrong": "Kafka isn't designed for random-access ACID balance checks and point-in-time relational queries."
       }
     },
-    "wisdomTakeaway": "Great RFC reviews rank risks ruthlessly: stop data corruption and cascading outages first, remove cross-boundary DB coupling second, and leave clean seams for 10x scale."
+    "wisdomTakeaway": "Great RFC reviews rank risks ruthlessly: stop data corruption and cascading outages first, remove cross-boundary DB coupling second, and leave clean seams for 10x scale.",
+    "sources": [
+      {
+        "title": "Pattern: Transactional Outbox",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+      },
+      {
+        "title": "Exponential Backoff And Jitter",
+        "author": "Marc Brooker (AWS Architecture Blog)",
+        "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+      },
+      {
+        "title": "Fitness Function-Driven Development",
+        "author": "Thoughtworks",
+        "url": "https://www.thoughtworks.com/insights/articles/fitness-function-driven-development"
+      }
+    ]
   }
 ]

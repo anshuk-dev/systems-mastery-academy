@@ -31,7 +31,19 @@
         "whyWrong": "Worker threads waiting on slow 2s socket I/O use near-zero CPU while completely blocking request intake."
       }
     },
-    "wisdomTakeaway": "Slow dependencies are deadlier than fast crashes: rising W multiplies concurrency L until every thread pool upstream suffocates."
+    "wisdomTakeaway": "Slow dependencies are deadlier than fast crashes: rising W multiplies concurrency L until every thread pool upstream suffocates.",
+    "sources": [
+      {
+        "title": "Little's Law (Operations Research, 1961)",
+        "author": "John D. C. Little (via Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+      },
+      {
+        "title": "Using load shedding to avoid overload",
+        "author": "David Yanacek (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+      }
+    ]
   },
   {
     "id": "OPT-02",
@@ -65,7 +77,14 @@
         "whyWrong": "A 10ms timeout drops valid shards routinely, degrading search relevance and user trust."
       }
     },
-    "wisdomTakeaway": "At scale, the average doesn't matter—when fanning out across N components, everyone experiences the tail."
+    "wisdomTakeaway": "At scale, the average doesn't matter—when fanning out across N components, everyone experiences the tail.",
+    "sources": [
+      {
+        "title": "The Tail at Scale (CACM, 2013)",
+        "author": "Jeffrey Dean & Luiz André Barroso (Google)",
+        "url": "https://research.google/pubs/the-tail-at-scale/"
+      }
+    ]
   },
   {
     "id": "OPT-03",
@@ -99,7 +118,14 @@
         "whyWrong": "Raising `max_connections` to 10,000 and doubling pods makes lock contention and RAM exhaustion (each Postgres backend consumes several MB) catastrophically worse."
       }
     },
-    "wisdomTakeaway": "More database connections almost never equal more database throughput—a 16-core DB runs fastest with dozens of active connections, not thousands."
+    "wisdomTakeaway": "More database connections almost never equal more database throughput—a 16-core DB runs fastest with dozens of active connections, not thousands.",
+    "sources": [
+      {
+        "title": "About Pool Sizing",
+        "author": "Brett Wooldridge (HikariCP Wiki)",
+        "url": "https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"
+      }
+    ]
   },
   {
     "id": "OPT-04",
@@ -133,7 +159,19 @@
         "whyWrong": "All 5 Redis replicas expire the same key at the exact same second and still forward 15,000 misses to Postgres."
       }
     },
-    "wisdomTakeaway": "Never let 10,000 concurrent cache misses each independently ask the database the exact same question—coalesce with Singleflight or refresh before expiry."
+    "wisdomTakeaway": "Never let 10,000 concurrent cache misses each independently ask the database the exact same question—coalesce with Singleflight or refresh before expiry.",
+    "sources": [
+      {
+        "title": "Optimal Probabilistic Cache Stampede Prevention (XFetch)",
+        "author": "Vattani, Chierichetti & Lowenstein (2015)",
+        "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+      },
+      {
+        "title": "Cache-Aside pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+      }
+    ]
   },
   {
     "id": "OPT-05",
@@ -167,7 +205,19 @@
         "whyWrong": "Fetching 1,000 rows on initial page load wastes bandwidth, memory, and DB I/O when users typically read only the first 20 items."
       }
     },
-    "wisdomTakeaway": "For feeds, logs, and APIs over large datasets, `OFFSET` is a ticking latency bomb—default to cursor/keyset pagination."
+    "wisdomTakeaway": "For feeds, logs, and APIs over large datasets, `OFFSET` is a ticking latency bomb—default to cursor/keyset pagination.",
+    "sources": [
+      {
+        "title": "We Need Tooling for Keyset Pagination (No Offset)",
+        "author": "Markus Winand (Use The Index, Luke)",
+        "url": "https://use-the-index-luke.com/no-offset"
+      },
+      {
+        "title": "Concatenated Indexes (Leftmost Prefix Rule)",
+        "author": "Markus Winand (Use The Index, Luke)",
+        "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+      }
+    ]
   },
   {
     "id": "OPT-06",
@@ -201,7 +251,19 @@
         "whyWrong": "In PostgreSQL `VARCHAR` and `TEXT` share the exact same underlying varlena storage and B-Tree mechanics."
       }
     },
-    "wisdomTakeaway": "Design composite indexes like phone books: equality columns first, range/sort columns next, and `INCLUDE` payload columns to eliminate table heap hops."
+    "wisdomTakeaway": "Design composite indexes like phone books: equality columns first, range/sort columns next, and `INCLUDE` payload columns to eliminate table heap hops.",
+    "sources": [
+      {
+        "title": "Concatenated Indexes (Leftmost Prefix Rule)",
+        "author": "Markus Winand (Use The Index, Luke)",
+        "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+      },
+      {
+        "title": "Index-Only Scan / Covering Indexes",
+        "author": "Markus Winand (Use The Index, Luke)",
+        "url": "https://use-the-index-luke.com/sql/clustering/index-only-scan-covering-index"
+      }
+    ]
   },
   {
     "id": "OPT-07",
@@ -235,7 +297,19 @@
         "whyWrong": "Even if each SQL query ran in 0.1ms on 64 cores, 160 sequential network round trips over TCP still burn hundreds of milliseconds."
       }
     },
-    "wisdomTakeaway": "Never optimize by intuition: look at a trace/flamegraph first, and crush network round trips (N+1s) before touching micro-benchmarks."
+    "wisdomTakeaway": "Never optimize by intuition: look at a trace/flamegraph first, and crush network round trips (N+1s) before touching micro-benchmarks.",
+    "sources": [
+      {
+        "title": "The USE Method",
+        "author": "Brendan Gregg",
+        "url": "https://www.brendangregg.com/usemethod.html"
+      },
+      {
+        "title": "The RED Method: How to Instrument Your Services",
+        "author": "Tom Wilkie (Grafana Labs)",
+        "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+      }
+    ]
   },
   {
     "id": "OPT-08",
@@ -269,7 +343,19 @@
         "whyWrong": "AOF `fsync=always` slows down Redis writes and has zero effect on read-miss penetration."
       }
     },
-    "wisdomTakeaway": "Your cache must protect the database from 'not found' floods too—validate shapes early, negative-cache misses briefly, or filter with a Bloom filter."
+    "wisdomTakeaway": "Your cache must protect the database from 'not found' floods too—validate shapes early, negative-cache misses briefly, or filter with a Bloom filter.",
+    "sources": [
+      {
+        "title": "Cache-Aside pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+      },
+      {
+        "title": "Optimal Probabilistic Cache Stampede Prevention (XFetch)",
+        "author": "Vattani, Chierichetti & Lowenstein (2015)",
+        "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+      }
+    ]
   },
   {
     "id": "OPT-09",
@@ -303,7 +389,19 @@
         "whyWrong": "Wrapping synchronous CPU code in `async/await` or `Promise.all` still executes sequentially on the single main JS thread."
       }
     },
-    "wisdomTakeaway": "Event-loop architectures scale I/O concurrency brilliantly and collapse catastrophically the moment someone puts synchronous CPU work on the loop."
+    "wisdomTakeaway": "Event-loop architectures scale I/O concurrency brilliantly and collapse catastrophically the moment someone puts synchronous CPU work on the loop.",
+    "sources": [
+      {
+        "title": "The USE Method",
+        "author": "Brendan Gregg",
+        "url": "https://www.brendangregg.com/usemethod.html"
+      },
+      {
+        "title": "The RED Method: How to Instrument Your Services",
+        "author": "Tom Wilkie (Grafana Labs)",
+        "url": "https://grafana.com/blog/the-red-method-how-to-instrument-your-services/"
+      }
+    ]
   },
   {
     "id": "OPT-10",
@@ -337,6 +435,18 @@
         "whyWrong": "Creating 50,000 tiny files/sec on NFS obliterates filesystem metadata ops and makes querying impossible."
       }
     },
-    "wisdomTakeaway": "When write IOPS or network RTT bottlenecks ingestion, micro-batch with a tight `(max_count, max_wait_ms)` bound to trade milliseconds for orders-of-magnitude throughput."
+    "wisdomTakeaway": "When write IOPS or network RTT bottlenecks ingestion, micro-batch with a tight `(max_count, max_wait_ms)` bound to trade milliseconds for orders-of-magnitude throughput.",
+    "sources": [
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      },
+      {
+        "title": "About Pool Sizing",
+        "author": "Brett Wooldridge (HikariCP Wiki)",
+        "url": "https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing"
+      }
+    ]
   }
 ]

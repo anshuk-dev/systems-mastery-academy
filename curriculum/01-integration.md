@@ -39,6 +39,11 @@ Integration is where clean diagrams meet messy distributed reality: partial fail
 
 > **Rule of Thumb:** Ask: 'If the downstream system goes down for 15 minutes, must my caller fail immediately?' If no, never put a synchronous network call on that path.
 
+### Verified Primary Sources
+
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/) — Gregor Hohpe & Bobby Woolf
+- [What do you mean by 'Event-Driven'?](https://martinfowler.com/articles/201701-event-driven.html) — Martin Fowler
+
 ---
 
 ## Reliability Across Unreliable Networks (30 min)
@@ -72,6 +77,12 @@ Integration is where clean diagrams meet messy distributed reality: partial fail
 
 > **Rule of Thumb:** Never trust a timeout to mean 'nothing happened'. Treat timeouts as 'unknown outcome' and require idempotency before retrying.
 
+### Verified Primary Sources
+
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
+- [Pattern: Saga](https://microservices.io/patterns/data/saga.html) — Chris Richardson (microservices.io)
+- [Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) — Brandur Leach (Stripe Engineering)
+
 ---
 
 ## Contracts, Evolution & Fault Isolation (25 min)
@@ -103,5 +114,14 @@ Integration is where clean diagrams meet messy distributed reality: partial fail
 - Exposing raw vendor/ERP field names directly in your public API responses.
 
 > **Rule of Thumb:** Retry only at ONE layer (typically closest to the origin or via explicit deadline propagation), always with jitter and a retry budget.
+
+### Verified Primary Sources
+
+- [Anti-corruption Layer pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer) — Microsoft Azure Architecture Center
+- [Timeouts, retries, and backoff with jitter](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter) — Marc Brooker (AWS Builders' Library)
+- [Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) — Marc Brooker (AWS Architecture Blog)
+- [Bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — Microsoft Azure Architecture Center
+- [Circuit Breaker pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker) — Microsoft Azure Architecture Center
+- [Consumer-Driven Contract Testing (Pact Docs)](https://docs.pact.io/) — Pact Foundation
 
 ---

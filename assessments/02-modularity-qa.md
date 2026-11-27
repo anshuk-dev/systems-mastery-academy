@@ -1,6 +1,6 @@
 # Assessment & Distractor Analysis — 02: Modular Architecture
 
-10 scenario-based engineering questions with detailed explanations and option-by-option distractor analysis.
+10 scenario-based engineering questions grounded in verified primary engineering literature.
 
 ---
 
@@ -16,7 +16,7 @@
 - **D.** Introduce GraphQL Federation on top of the 12 services so frontend only makes one call.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -30,6 +30,12 @@
 - **D (Distractor — _Beautifying the storefront while the kitchen is tangled_):** GraphQL Federation only simplifies client querying; backend feature changes still require 6 coordinated PRs and shared DB migrations.
 
 > **Wisdom Takeaway:** If a single business change consistently requires synchronized releases across multiple services, you don't have microservices—you have a distributed monolith.
+
+#### Verified Primary Sources
+
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) — Martin Fowler
+- [Microservices](https://martinfowler.com/articles/microservices.html) — James Lewis & Martin Fowler
+- [Decompose by Business Capability](https://microservices.io/patterns/decomposition/decompose-by-business-capability.html) — Chris Richardson (microservices.io)
 
 </details>
 
@@ -47,7 +53,7 @@
 - **D.** Split every pricing class into its own AWS Lambda function.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -61,6 +67,11 @@
 - **D (Distractor — _Confusing serverless packaging with clean dependency structure_):** A Lambda function whose handler still entangles Stripe SDK, HTTP parsing, and pricing math has the exact same coupling problem—now with cold starts.
 
 > **Wisdom Takeaway:** Your business logic should have zero idea whether it was invoked by HTTP, Kafka, or a CLI test—and zero idea whether data lives in Postgres or memory.
+
+#### Verified Primary Sources
+
+- [Hexagonal Architecture (Ports and Adapters)](https://alistair.cockburn.us/hexagonal-architecture/) — Alistair Cockburn
+- [Bounded Context](https://martinfowler.com/bliki/BoundedContext.html) — Martin Fowler
 
 </details>
 
@@ -78,7 +89,7 @@
 - **D.** Because DRY only applies to UI components, never backend code.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -92,6 +103,11 @@
 - **D (Distractor — _Overgeneralized dismissal of DRY_):** DRY is valuable *within* a single cohesive concept (e.g., one authoritative tax calculation formula), just harmful when forcing artificial unification *across* bounded contexts.
 
 > **Wisdom Takeaway:** A little duplication across bounded contexts is far cheaper than the wrong shared abstraction.
+
+#### Verified Primary Sources
+
+- [Bounded Context](https://martinfowler.com/bliki/BoundedContext.html) — Martin Fowler
+- [Decompose by Business Capability](https://microservices.io/patterns/decomposition/decompose-by-business-capability.html) — Chris Richardson (microservices.io)
 
 </details>
 
@@ -109,7 +125,7 @@
 - **D.** Positional tuples are safer than named fields because they avoid naming conflicts.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -123,6 +139,10 @@
 - **D (Distractor — _Confusing brevity with safety_):** Short positional tuples invite silent transposition bugs (swapping `amount` and `user_id` if both are ints) and hurt readability across module borders.
 
 > **Wisdom Takeaway:** Push module interfaces toward weak, static coupling (explicit types and names) and eliminate hidden execution-order assumptions.
+
+#### Verified Primary Sources
+
+- [Connascence (Software Engineering)](https://en.wikipedia.org/wiki/Connascence) — Meilir Page-Jones (via Wikipedia)
 
 </details>
 
@@ -140,7 +160,7 @@
 - **D.** Rewrite the database schema first while both old and new checkout code write randomly to overlapping tables.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -154,6 +174,11 @@
 - **D (Distractor — _Uncontrolled dual-writes on live tables_):** Two codebases mutating overlapping legacy tables with different invariants corrupts financial state and makes rollback impossible.
 
 > **Wisdom Takeaway:** Never bet the business on a big-bang cutover—strangle legacy systems one vertical slice at a time with instant rollback.
+
+#### Verified Primary Sources
+
+- [Strangler Fig Application](https://martinfowler.com/bliki/StranglerFigApplication.html) — Martin Fowler
+- [Branch by Abstraction](https://martinfowler.com/bliki/BranchByAbstraction.html) — Martin Fowler
 
 </details>
 
@@ -171,7 +196,7 @@
 - **D.** Move all validation logic into frontend React components so backend folders shrink.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -185,6 +210,11 @@
 - **D (Distractor — _Violating server-side trust boundaries_):** Frontend validation is UX only; skipping backend validation opens security and data-corruption vulnerabilities.
 
 > **Wisdom Takeaway:** Organize folders by business capability and use case, not by technical layer—optimize for how features actually change.
+
+#### Verified Primary Sources
+
+- [Decompose by Business Capability](https://microservices.io/patterns/decomposition/decompose-by-business-capability.html) — Chris Richardson (microservices.io)
+- [Connascence (Software Engineering)](https://en.wikipedia.org/wiki/Connascence) — Meilir Page-Jones (via Wikipedia)
 
 </details>
 
@@ -202,7 +232,7 @@
 - **D.** Require every engineer to obtain VP approval before adding any `import` statement.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -216,6 +246,11 @@
 - **D (Distractor — _Bureaucratic friction instead of automated feedback_):** Human approval queues kill velocity without giving instant local IDE/CI feedback.
 
 > **Wisdom Takeaway:** Good intentions don't preserve modular boundaries—automated CI fitness functions do.
+
+#### Verified Primary Sources
+
+- [Fitness Function-Driven Development](https://www.thoughtworks.com/insights/articles/fitness-function-driven-development) — Thoughtworks
+- [Hexagonal Architecture (Ports and Adapters)](https://alistair.cockburn.us/hexagonal-architecture/) — Alistair Cockburn
 
 </details>
 
@@ -233,7 +268,7 @@
 - **D.** Switch from microservices to serverless functions while keeping the exact same 4 siloed teams.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **A**
 
@@ -247,6 +282,11 @@
 - **D (Distractor — _Changing compute runtime without changing ownership_):** Serverless functions built by siloed UI/API/DB teams simply reproduce the same cross-team handoff bottlenecks.
 
 > **Wisdom Takeaway:** Architecture and org design are two halves of one system—if your teams are sliced horizontally, your system will fight vertical modularity.
+
+#### Verified Primary Sources
+
+- [How Do Committees Invent? (Conway's Law, 1968)](https://www.melconway.com/Home/Conways_Law.html) — Melvin E. Conway
+- [Decompose by Business Capability](https://microservices.io/patterns/decomposition/decompose-by-business-capability.html) — Chris Richardson (microservices.io)
 
 </details>
 
@@ -264,7 +304,7 @@
 - **D.** Move the abstract classes into a separate Git repository so the main repo looks cleaner.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -278,6 +318,11 @@
 - **D (Distractor — _Hiding bloat in another repository_):** Moving speculative base classes to another repo makes debugging and evolving them even more painful.
 
 > **Wisdom Takeaway:** Duplication is cheap; the wrong abstraction is expensive. Abstract at real boundaries and real points of variation.
+
+#### Verified Primary Sources
+
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) — Martin Fowler
+- [Connascence (Software Engineering)](https://en.wikipedia.org/wiki/Connascence) — Meilir Page-Jones (via Wikipedia)
 
 </details>
 
@@ -295,7 +340,7 @@
 - **D.** Keep `if (tenant == ...)` branches inside core code, just require 2 reviewers per PR.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -309,6 +354,11 @@
 - **D (Distractor — _Process review cannot fix structural coupling_):** Core releases stay blocked by tenant rules, and every new tenant grows conditional spaghetti inside shared business paths.
 
 > **Wisdom Takeaway:** When core logic accumulates `if (customer == X)` branches, extract a stable Extension SPI and isolate custom behavior outside the core blast radius.
+
+#### Verified Primary Sources
+
+- [Hexagonal Architecture (Ports and Adapters)](https://alistair.cockburn.us/hexagonal-architecture/) — Alistair Cockburn
+- [Bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — Microsoft Azure Architecture Center
 
 </details>
 

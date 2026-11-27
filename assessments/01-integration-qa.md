@@ -1,6 +1,6 @@
 # Assessment & Distractor Analysis — 01: System Integration
 
-10 scenario-based engineering questions with detailed explanations and option-by-option distractor analysis.
+10 scenario-based engineering questions grounded in verified primary engineering literature.
 
 ---
 
@@ -16,7 +16,7 @@
 - **D.** Enable Kafka `acks=all` and `enable.idempotence=true` on the producer so the broker guarantees delivery after DB commit.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **C**
 
@@ -30,6 +30,11 @@
 - **D (Distractor — _Confusing transport guarantees with application atomicity_):** `acks=all` and producer idempotence only make Kafka's internal replication and retry within a live producer reliable—they cannot bridge the crash window between a separate PostgreSQL `COMMIT` and calling `send()`.
 
 > **Wisdom Takeaway:** Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox.
+
+#### Verified Primary Sources
+
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
 
 </details>
 
@@ -47,7 +52,7 @@
 - **D.** Check the customer's recent charges via `GET /charges?user_id=...` before retrying `POST /charges`.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -61,6 +66,11 @@
 - **D (Distractor — _Time-of-Check to Time-of-Use (TOCTOU) race condition_):** If the first charge is still in-flight or replicated asynchronously when `GET` runs, `GET` returns nothing, Checkout retries `POST`, and both charges succeed concurrently. Also fails if a legitimate repeat purchase happens seconds apart.
 
 > **Wisdom Takeaway:** Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry.
+
+#### Verified Primary Sources
+
+- [Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) — Brandur Leach (Stripe Engineering)
+- [Timeouts, retries, and backoff with jitter](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter) — Marc Brooker (AWS Builders' Library)
 
 </details>
 
@@ -78,7 +88,7 @@
 - **D.** Increase the backoff base from 100ms to 5,000ms at every service layer so Service C gets longer rest periods.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -92,6 +102,12 @@
 - **D (Distractor — _Holding resources hostage while sleeping_):** Sleeping 5s+ across all layers multiplies concurrency `L = lambda * W`, exhausting threads/file descriptors across Gateway, A, and B while still keeping the 64x multiplicative retry fan-out.
 
 > **Wisdom Takeaway:** Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines.
+
+#### Verified Primary Sources
+
+- [Timeouts, retries, and backoff with jitter](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter) — Marc Brooker (AWS Builders' Library)
+- [Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) — Marc Brooker (AWS Architecture Blog)
+- [Metastable Failures in Distributed Systems (HotOS 2021)](https://charap.co/metastable-failures-in-distributed-systems/) — Bronson, Aghayev, Charapko & Zhu
 
 </details>
 
@@ -109,7 +125,7 @@
 - **D.** Replicate the ERP's internal database tables directly into every microservice's database using nightly CSV dumps.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -123,6 +139,11 @@
 - **D (Distractor — _Coupling directly to internal physical schemas_):** CSV table dumps bypass business invariants, create stale batch windows, and couple all microservices to internal ERP table layouts.
 
 > **Wisdom Takeaway:** Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer.
+
+#### Verified Primary Sources
+
+- [Anti-corruption Layer pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer) — Microsoft Azure Architecture Center
+- [Bounded Context](https://martinfowler.com/bliki/BoundedContext.html) — Martin Fowler
 
 </details>
 
@@ -140,7 +161,7 @@
 - **D.** Delete `amount_cents` from the Schema Registry and restart Kafka brokers with compatibility mode set to `NONE`.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -154,6 +175,11 @@
 - **D (Distractor — _Disabling safety rails instead of evolving safely_):** Setting compatibility to `NONE` and deleting fields immediately crashes existing consumers deserializing either old historical events or new events.
 
 > **Wisdom Takeaway:** In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old.
+
+#### Verified Primary Sources
+
+- [What do you mean by 'Event-Driven'?](https://martinfowler.com/articles/201701-event-driven.html) — Martin Fowler
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
 
 </details>
 
@@ -171,7 +197,7 @@
 - **D.** Choreography always duplicates network traffic 6x compared to orchestration.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -185,6 +211,11 @@
 - **D (Distractor — _Invented performance metric_):** Orchestration actually sends command + reply messages through the coordinator (similar or slightly more hops than direct choreography); you choose orchestration for clarity and control, not fewer packets.
 
 > **Wisdom Takeaway:** Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants.
+
+#### Verified Primary Sources
+
+- [Pattern: Saga](https://microservices.io/patterns/data/saga.html) — Chris Richardson (microservices.io)
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/) — Gregor Hohpe & Bobby Woolf
 
 </details>
 
@@ -202,7 +233,7 @@
 - **D.** Move `/export-pdf` from HTTP/1.1 to HTTP/2 multiplexing on the same shared worker pool.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **A**
 
@@ -216,6 +247,11 @@
 - **D (Distractor — _Confusing transport multiplexing with worker pool isolation_):** HTTP/2 multiplexes TCP frames over one socket, which doesn't stop slow PDF work from holding every application worker thread on the shared pool.
 
 > **Wisdom Takeaway:** Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads.
+
+#### Verified Primary Sources
+
+- [Bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — Microsoft Azure Architecture Center
+- [Timeouts, retries, and backoff with jitter](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter) — Marc Brooker (AWS Builders' Library)
 
 </details>
 
@@ -233,7 +269,7 @@
 - **D.** Increase partitions from 12 to 120 so the poison pill affects fewer users.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -247,6 +283,11 @@
 - **D (Distractor — _Reducing blast radius from 8% to 0.8% instead of fixing the stall_):** 0.8% of your customer base completely frozen for days is still a major incident, and you still lack a mechanism to recover the broken message.
 
 > **Wisdom Takeaway:** Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay).
+
+#### Verified Primary Sources
+
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/) — Gregor Hohpe & Bobby Woolf
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
 
 </details>
 
@@ -264,7 +305,7 @@
 - **D.** Replace Kafka with cron jobs polling `ContentService` every 5 seconds.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -278,6 +319,11 @@
 - **D (Distractor — _Replacing event-driven push with wasteful polling_):** 14 services polling every 5 seconds wastes bandwidth, increases latency, and still hammers `ContentService`.
 
 > **Wisdom Takeaway:** If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede.
+
+#### Verified Primary Sources
+
+- [What do you mean by 'Event-Driven'?](https://martinfowler.com/articles/201701-event-driven.html) — Martin Fowler
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/) — Gregor Hohpe & Bobby Woolf
 
 </details>
 
@@ -295,7 +341,7 @@
 - **D.** Create 5 more shared staging environments so teams wait less in line.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -309,6 +355,11 @@
 - **D (Distractor — _Scaling a broken architecture linearly_):** 5 staging environments multiply cloud cost and environment-drift maintenance while each individual 90-minute run still flakes 35% of the time.
 
 > **Wisdom Takeaway:** Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck.
+
+#### Verified Primary Sources
+
+- [Consumer-Driven Contract Testing (Pact Docs)](https://docs.pact.io/) — Pact Foundation
+- [Microservices](https://martinfowler.com/articles/microservices.html) — James Lewis & Martin Fowler
 
 </details>
 

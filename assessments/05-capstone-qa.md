@@ -1,6 +1,6 @@
 # Assessment & Distractor Analysis — 05: Integrated Systems Capstone
 
-10 scenario-based engineering questions with detailed explanations and option-by-option distractor analysis.
+10 scenario-based engineering questions grounded in verified primary engineering literature.
 
 ---
 
@@ -16,7 +16,7 @@
 - **D.** Switch Checkout from REST to GraphQL so stock updates are typed.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -30,6 +30,11 @@
 - **D (Distractor — _Wire protocol swap with zero effect on concurrency control_):** GraphQL provides typed schemas, not atomic transactional stock reservation.
 
 > **Wisdom Takeaway:** Know which invariants MUST be strongly consistent synchronously (money, scarce inventory) and which can be eventual (emails, search, analytics).
+
+#### Verified Primary Sources
+
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
 
 </details>
 
@@ -47,7 +52,7 @@
 - **D.** Disable timeouts on all 14 HTTP clients so partial deploys don't trigger errors.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -61,6 +66,11 @@
 - **D (Distractor — _Hiding outages via infinite hang_):** Disabling timeouts turns every minor downstream hiccup into complete thread-pool starvation across the platform.
 
 > **Wisdom Takeaway:** Every network hop you add taxes latency, availability, and debuggability—only cross the network when the autonomy payoff genuinely exceeds the distributed tax.
+
+#### Verified Primary Sources
+
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) — Martin Fowler
+- [The Tail at Scale (CACM, 2013)](https://research.google/pubs/the-tail-at-scale/) — Jeffrey Dean & Luiz André Barroso (Google)
 
 </details>
 
@@ -78,7 +88,7 @@
 - **D.** Flush all remaining keys in Redis to start fresh.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -92,6 +102,12 @@
 - **D (Distractor — _Dropping remaining 40% cache hits to 0%_):** Flushing Redis forces 100% of reads onto the already-collapsed database.
 
 > **Wisdom Takeaway:** In a metastable outage, waiting it out fails—you must actively shed load and halt retries to drop utilization below the recovery threshold.
+
+#### Verified Primary Sources
+
+- [Metastable Failures in Distributed Systems (HotOS 2021)](https://charap.co/metastable-failures-in-distributed-systems/) — Bronson, Aghayev, Charapko & Zhu
+- [Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) — David Yanacek (AWS Builders' Library)
+- [Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) — Marc Brooker (AWS Architecture Blog)
 
 </details>
 
@@ -109,7 +125,7 @@
 - **D.** Delete the preference columns from the monolith immediately before building the new UI.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -123,6 +139,11 @@
 - **D (Distractor — _Breaking live production callers before replacement exists_):** Deleting legacy columns breaks 18 active monolith paths immediately.
 
 > **Wisdom Takeaway:** Migrate data-heavy modules in four safe beats: Backfill + Live Sync -> Shadow Read Parity -> Cutover Reads -> Cutover Writes.
+
+#### Verified Primary Sources
+
+- [Strangler Fig Application](https://martinfowler.com/bliki/StranglerFigApplication.html) — Martin Fowler
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
 
 </details>
 
@@ -140,7 +161,7 @@
 - **D.** Disable Redis caching because 97% hit rate isn't 100%.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -154,6 +175,12 @@
 - **D (Distractor — _Destroying a healthy 97% cache shield_):** Turning off Redis would overload the healthy DB on top of the ML outage.
 
 > **Wisdom Takeaway:** Always build graceful degradation fallbacks for non-critical enrichments (recommendations, avatars, badges)—never let an ML sidecar take down your core feed.
+
+#### Verified Primary Sources
+
+- [Circuit Breaker pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker) — Microsoft Azure Architecture Center
+- [Bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — Microsoft Azure Architecture Center
+- [The RED Method: How to Instrument Your Services](https://grafana.com/blog/the-red-method-how-to-instrument-your-services/) — Tom Wilkie (Grafana Labs)
 
 </details>
 
@@ -171,7 +198,7 @@
 - **D.** Overwrite `shipment.status = payload.status` blindly on every webhook.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -185,6 +212,11 @@
 - **D (Distractor — _Blind state overwrite regression_):** Blindly overwriting status lets late `out_for_delivery` events falsely tell customers their already-delivered package isn't delivered.
 
 > **Wisdom Takeaway:** Never trust external webhooks to arrive once or in order—ack fast, deduplicate atomically, and guard state transitions monotonically.
+
+#### Verified Primary Sources
+
+- [Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) — Brandur Leach (Stripe Engineering)
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/) — Gregor Hohpe & Bobby Woolf
 
 </details>
 
@@ -202,7 +234,7 @@
 - **D.** Tell them to drop all modularity and put all SQL queries inside frontend React components.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -216,6 +248,11 @@
 - **D (Distractor — _False dichotomy between 'over-engineered microservices' and 'no modularity'_):** Rejecting microservices does NOT mean abandoning modularity—a Modular Monolith gives clean boundaries with zero network tax.
 
 > **Wisdom Takeaway:** Don't solve 10-million-QPS problems for a 150-QPS system; earn your distributed complexity one real bottleneck at a time.
+
+#### Verified Primary Sources
+
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) — Martin Fowler
+- [Microservices](https://martinfowler.com/articles/microservices.html) — James Lewis & Martin Fowler
 
 </details>
 
@@ -233,7 +270,7 @@
 - **D.** Spin up 1,000 Lambda functions all calling the vendor simultaneously with 10 retries each.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -247,6 +284,12 @@
 - **D (Distractor — _Amplifying the 429 ban with 1,000 concurrent callers_):** 1,000 Lambdas x 10 retries hits the vendor even harder and triggers immediate key revocation.
 
 > **Wisdom Takeaway:** Always isolate priority lanes (OTPs vs bulk marketing) and pace outbound calls to external rate-limited vendors via queued leaky buckets.
+
+#### Verified Primary Sources
+
+- [Scaling your API with rate limiters](https://stripe.com/blog/rate-limiters) — Paul Tarjan (Stripe Engineering)
+- [Bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — Microsoft Azure Architecture Center
+- [Timeouts, retries, and backoff with jitter](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter) — Marc Brooker (AWS Builders' Library)
 
 </details>
 
@@ -264,7 +307,7 @@
 - **D.** Index `likes_count` with a B-Tree index.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -278,6 +321,11 @@
 - **D (Distractor — _Adding index maintenance overhead to a locked row_):** Indexing `likes_count` forces extra index-entry churn on every tap while doing zero to relieve the single-row exclusive lock.
 
 > **Wisdom Takeaway:** Single-row counters serialize writes completely—either batch increments before writing or shard the counter across N buckets.
+
+#### Verified Primary Sources
+
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+- [Amdahl's Law (AFIPS 1967)](https://en.wikipedia.org/wiki/Amdahl%27s_law) — Gene Amdahl (via Wikipedia)
 
 </details>
 
@@ -295,7 +343,7 @@
 - **D.** Remove the Ledger database entirely and store balances only in Kafka topics.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -309,6 +357,12 @@
 - **D (Distractor — _Replacing transactional ACID ledger guarantees with raw topic scans_):** Kafka isn't designed for random-access ACID balance checks and point-in-time relational queries.
 
 > **Wisdom Takeaway:** Great RFC reviews rank risks ruthlessly: stop data corruption and cascading outages first, remove cross-boundary DB coupling second, and leave clean seams for 10x scale.
+
+#### Verified Primary Sources
+
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
+- [Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) — Marc Brooker (AWS Architecture Blog)
+- [Fitness Function-Driven Development](https://www.thoughtworks.com/insights/articles/fitness-function-driven-development) — Thoughtworks
 
 </details>
 

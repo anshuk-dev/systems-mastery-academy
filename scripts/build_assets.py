@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate course JSON data, generate JS bundle for the web app, and render Markdown docs."""
+"""Validate course JSON data + verified primary sources, generate JS bundle, and render Markdown docs."""
 
 from __future__ import annotations
 
@@ -22,6 +22,14 @@ QUESTION_FILES = [
 LETTERS = ["A", "B", "C", "D"]
 
 
+def validate_sources(items: list[dict], owner_id: str) -> None:
+    assert isinstance(items, list) and len(items) >= 1, f"{owner_id}: missing verified sources"
+    for s in items:
+        assert s.get("title") and s.get("author") and s.get("url", "").startswith("https://"), (
+            f"{owner_id}: malformed source entry {s}"
+        )
+
+
 def load_and_validate() -> tuple[dict, list[dict]]:
     pillars_data = json.loads((DATA_DIR / "pillars.json").read_text(encoding="utf-8"))
     pillars = pillars_data.get("pillars", [])
@@ -37,6 +45,7 @@ def load_and_validate() -> tuple[dict, list[dict]]:
             seen_lesson_ids.add(lid)
             for field in ("title", "knowledge", "wisdom", "tradeoffs", "antiPatterns", "heuristic"):
                 assert lesson.get(field), f"Lesson {lid} missing {field}"
+            validate_sources(lesson.get("sources", []), f"Lesson {lid}")
 
     questions: list[dict] = []
     seen_q_ids = set()
@@ -52,6 +61,7 @@ def load_and_validate() -> tuple[dict, list[dict]]:
             assert isinstance(cidx, int) and 0 <= cidx <= 3, f"{qid}: invalid correctIndex {cidx}"
             assert q.get("explanation"), f"{qid}: missing explanation"
             assert q.get("wisdomTakeaway"), f"{qid}: missing wisdomTakeaway"
+            validate_sources(q.get("sources", []), f"Question {qid}")
             da = q.get("distractorAnalysis", {})
             for idx in range(4):
                 key = str(idx)
@@ -127,11 +137,13 @@ def render_curriculum_markdown(pillars_data: dict) -> None:
                 "",
                 f"> **Rule of Thumb:** {lesson['heuristic']}",
                 "",
-                "---",
+                "### Verified Primary Sources",
                 "",
             ])
-        slug = pillar["id"]
-        filename = f"{pillar['number']}-{slug}.md"
+            for s in lesson["sources"]:
+                lines.append(f"- [{s['title']}]({s['url']}) — {s['author']}")
+            lines.extend(["", "---", ""])
+        filename = f"{pillar['number']}-{pillar['id']}.md"
         (CURRICULUM_DIR / filename).write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -147,7 +159,7 @@ def render_assessments_markdown(pillars_data: dict, questions: list[dict]) -> No
         lines = [
             f"# Assessment & Distractor Analysis — {pillar['number']}: {pillar['name']}",
             "",
-            f"{len(qlist)} scenario-based engineering questions with detailed explanations and option-by-option distractor analysis.",
+            f"{len(qlist)} scenario-based engineering questions grounded in verified primary engineering literature.",
             "",
             "---",
             "",
@@ -167,7 +179,7 @@ def render_assessments_markdown(pillars_data: dict, questions: list[dict]) -> No
             lines.extend([
                 "",
                 "<details>",
-                "<summary>Show Answer, Explanation & Distractor Analysis</summary>",
+                "<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>",
                 "",
                 f"**Correct Answer:** **{LETTERS[cidx]}**",
                 "",
@@ -188,11 +200,12 @@ def render_assessments_markdown(pillars_data: dict, questions: list[dict]) -> No
                 "",
                 f"> **Wisdom Takeaway:** {q['wisdomTakeaway']}",
                 "",
-                "</details>",
-                "",
-                "---",
+                "#### Verified Primary Sources",
                 "",
             ])
+            for s in q["sources"]:
+                lines.append(f"- [{s['title']}]({s['url']}) — {s['author']}")
+            lines.extend(["", "</details>", "", "---", ""])
         filename = f"{pillar['number']}-{pid}-qa.md"
         (ASSESSMENTS_DIR / filename).write_text("\n".join(lines), encoding="utf-8")
 
@@ -203,9 +216,15 @@ def main() -> None:
     render_curriculum_markdown(pillars_data)
     render_assessments_markdown(pillars_data, questions)
     total_lessons = sum(len(p["lessons"]) for p in pillars_data["pillars"])
+    unique_urls = {
+        s["url"]
+        for p in pillars_data["pillars"]
+        for l in p["lessons"]
+        for s in l["sources"]
+    } | {s["url"] for q in questions for s in q["sources"]}
     print(
         f"Validated and built assets: {len(pillars_data['pillars'])} pillars, "
-        f"{total_lessons} lessons, {len(questions)} questions."
+        f"{total_lessons} lessons, {len(questions)} questions, {len(unique_urls)} verified primary source URLs."
     )
 
 

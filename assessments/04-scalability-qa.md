@@ -1,6 +1,6 @@
 # Assessment & Distractor Analysis — 04: System Scalability
 
-10 scenario-based engineering questions with detailed explanations and option-by-option distractor analysis.
+10 scenario-based engineering questions grounded in verified primary engineering literature.
 
 ---
 
@@ -16,7 +16,7 @@
 - **D.** Because 16 is an even power of 2, hash collisions double.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -30,6 +30,11 @@
 - **D (Distractor — _Misunderstanding power-of-two sizing_):** Powers of two are standard in consistent hashing and memory alignment and do not trigger quadratic collision spikes.
 
 > **Wisdom Takeaway:** If adding nodes makes your cluster slower, you have a coherency tax (`beta > 0`)—stop adding machines and remove the global cross-node coordination.
+
+#### Verified Primary Sources
+
+- [A General Theory of Computational Scalability Based on Rational Functions (USL)](https://arxiv.org/abs/0808.1431) — Neil J. Gunther (arXiv:0808.1431)
+- [Amdahl's Law (AFIPS 1967)](https://en.wikipedia.org/wiki/Amdahl%27s_law) — Gene Amdahl (via Wikipedia)
 
 </details>
 
@@ -47,7 +52,7 @@
 - **D.** Add 16 more virtual nodes on MegaCorp's single shard.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -61,6 +66,11 @@
 - **D (Distractor — _Confusing virtual nodes with splitting a single key_):** Virtual nodes balance key ranges across physical servers; a single key (`MegaCorp`) still maps to only one vnode on one physical server at a time.
 
 > **Wisdom Takeaway:** Uniform hashing only balances keys, never skew—design shard keys for cardinality AND volume distribution, especially with enterprise whales.
+
+#### Verified Primary Sources
+
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+- [Consistent Hashing and Random Trees (STOC 1997)](https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf) — David Karger et al. (MIT / Princeton CS)
 
 </details>
 
@@ -78,7 +88,7 @@
 - **D.** Switch from MD5 to SHA-256 inside `hash(user_id) % N`.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -92,6 +102,10 @@
 - **D (Distractor — _Changing hash algorithm doesn't fix modulo instability_):** `sha256(key) % 9` still remaps ~90% of keys compared to `sha256(key) % 10`.
 
 > **Wisdom Takeaway:** Never use `hash(key) % N` for stateful partitions or caches where N can change—use consistent hashing with virtual nodes.
+
+#### Verified Primary Sources
+
+- [Consistent Hashing and Random Trees (STOC 1997)](https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf) — David Karger et al. (MIT / Princeton CS)
 
 </details>
 
@@ -109,7 +123,7 @@
 - **D.** Add a `sleep(5000)` in the frontend after every `POST`.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -123,6 +137,10 @@
 - **D (Distractor — _Punishing UX and still failing during >5s lag spikes_):** Forcing every user to stare at a 5-second spinner feels broken and still fails whenever replication lag exceeds 5 seconds.
 
 > **Wisdom Takeaway:** Don't make the whole database synchronous just for Read-Your-Writes—pin the mutating user's session to the primary or track their commit LSN.
+
+#### Verified Primary Sources
+
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
 
 </details>
 
@@ -140,7 +158,7 @@
 - **D.** Ask the mobile app to automatically retry every timed-out 5s request 5 times immediately.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -154,6 +172,11 @@
 - **D (Distractor — _Turning a 5x spike into a 25x retry flood_):** Immediate retries during overload amplify traffic into total collapse.
 
 > **Wisdom Takeaway:** Under extreme overload, failing fast for excess low-priority load is the only way to keep critical paths fast and alive.
+
+#### Verified Primary Sources
+
+- [Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) — David Yanacek (AWS Builders' Library)
+- [Metastable Failures in Distributed Systems (HotOS 2021)](https://charap.co/metastable-failures-in-distributed-systems/) — Bronson, Aghayev, Charapko & Zhu
 
 </details>
 
@@ -171,7 +194,7 @@
 - **D.** Move the counter from Redis to an in-memory `HashMap` inside each of your 30 API pods.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **A**
 
@@ -185,6 +208,11 @@
 - **D (Distractor — _Per-pod local counters silently multiply limits by pod count_):** 30 independent in-memory HashMaps let an attacker send `30 * 100 = 3,000` requests/min under round-robin load balancing.
 
 > **Wisdom Takeaway:** Never use uncoordinated per-pod counters or naive fixed windows for strict rate limits—use atomic Token Bucket or Sliding Window limiters.
+
+#### Verified Primary Sources
+
+- [Scaling your API with rate limiters](https://stripe.com/blog/rate-limiters) — Paul Tarjan (Stripe Engineering)
+- [Rate Limiting Algorithms](https://redis.io/glossary/rate-limiting/) — Redis Glossary
 
 </details>
 
@@ -202,7 +230,7 @@
 - **D.** Store orders in Elasticsearch as the primary source of truth for checkout payments.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -216,6 +244,12 @@
 - **D (Distractor — _Using an eventually consistent search index as a financial ledger_):** Elasticsearch lacks multi-row ACID transactions, foreign keys, and strict durable isolation needed for payment/inventory invariants.
 
 > **Wisdom Takeaway:** When search/analytics queries start hurting transactional writes, don't overload OLTP with 20 indexes—project an async CQRS read model.
+
+#### Verified Primary Sources
+
+- [CQRS pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs) — Microsoft Azure Architecture Center
+- [Pattern: Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson (microservices.io)
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
 
 </details>
 
@@ -233,7 +267,7 @@
 - **D.** Keep all databases in US-East and just deploy static CDN HTML in EU and APAC.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **A**
 
@@ -247,6 +281,10 @@
 - **D (Distractor — _Ignoring API/DB latency and GDPR_):** Static CDN assets don't fix 200ms dynamic API round trips to US-East or keep EU user data inside the EU.
 
 > **Wisdom Takeaway:** Prefer home-region cellular isolation over global multi-master write complexity—respect both the speed of light and GDPR.
+
+#### Verified Primary Sources
+
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
 
 </details>
 
@@ -264,7 +302,7 @@
 - **D.** Scale based on Pod Disk Usage instead of CPU.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -278,6 +316,11 @@
 - **D (Distractor — _Using an irrelevant metric_):** Login traffic spikes CPU, memory, and connections—disk usage barely moves during authentication bursts.
 
 > **Wisdom Takeaway:** Reactive auto-scaling handles gradual diurnal curves, never vertical 9:00 AM cliff spikes—pre-warm predictably and design fast startup.
+
+#### Verified Primary Sources
+
+- [Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) — David Yanacek (AWS Builders' Library)
+- [The USE Method](https://www.brendangregg.com/usemethod.html) — Brendan Gregg
 
 </details>
 
@@ -295,7 +338,7 @@
 - **D.** Spawn 5,000 more transcoding threads inside the same API pod.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -309,6 +352,11 @@
 - **D (Distractor — _Accelerating CPU and memory exhaustion_):** 5,000 concurrent video transcodes on one pod immediately exhaust both RAM and CPU cores.
 
 > **Wisdom Takeaway:** An unbounded queue is just a delayed OOM crash; every buffer must be bounded, durable if critical, and capable of signaling backpressure.
+
+#### Verified Primary Sources
+
+- [Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) — David Yanacek (AWS Builders' Library)
+- [Bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — Microsoft Azure Architecture Center
 
 </details>
 

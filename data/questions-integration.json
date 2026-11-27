@@ -31,7 +31,19 @@
         "whyWrong": "`acks=all` and producer idempotence only make Kafka's internal replication and retry within a live producer reliable—they cannot bridge the crash window between a separate PostgreSQL `COMMIT` and calling `send()`."
       }
     },
-    "wisdomTakeaway": "Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox."
+    "wisdomTakeaway": "Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox.",
+    "sources": [
+      {
+        "title": "Pattern: Transactional Outbox",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+      },
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      }
+    ]
   },
   {
     "id": "INT-02",
@@ -65,7 +77,19 @@
         "whyWrong": "If the first charge is still in-flight or replicated asynchronously when `GET` runs, `GET` returns nothing, Checkout retries `POST`, and both charges succeed concurrently. Also fails if a legitimate repeat purchase happens seconds apart."
       }
     },
-    "wisdomTakeaway": "Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry."
+    "wisdomTakeaway": "Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry.",
+    "sources": [
+      {
+        "title": "Designing robust and predictable APIs with idempotency",
+        "author": "Brandur Leach (Stripe Engineering)",
+        "url": "https://stripe.com/blog/idempotency"
+      },
+      {
+        "title": "Timeouts, retries, and backoff with jitter",
+        "author": "Marc Brooker (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+      }
+    ]
   },
   {
     "id": "INT-03",
@@ -99,7 +123,24 @@
         "whyWrong": "Sleeping 5s+ across all layers multiplies concurrency `L = lambda * W`, exhausting threads/file descriptors across Gateway, A, and B while still keeping the 64x multiplicative retry fan-out."
       }
     },
-    "wisdomTakeaway": "Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines."
+    "wisdomTakeaway": "Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines.",
+    "sources": [
+      {
+        "title": "Timeouts, retries, and backoff with jitter",
+        "author": "Marc Brooker (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+      },
+      {
+        "title": "Exponential Backoff And Jitter",
+        "author": "Marc Brooker (AWS Architecture Blog)",
+        "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+      },
+      {
+        "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+        "author": "Bronson, Aghayev, Charapko & Zhu",
+        "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+      }
+    ]
   },
   {
     "id": "INT-04",
@@ -133,7 +174,19 @@
         "whyWrong": "CSV table dumps bypass business invariants, create stale batch windows, and couple all microservices to internal ERP table layouts."
       }
     },
-    "wisdomTakeaway": "Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer."
+    "wisdomTakeaway": "Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer.",
+    "sources": [
+      {
+        "title": "Anti-corruption Layer pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer"
+      },
+      {
+        "title": "Bounded Context",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/BoundedContext.html"
+      }
+    ]
   },
   {
     "id": "INT-05",
@@ -167,7 +220,19 @@
         "whyWrong": "Setting compatibility to `NONE` and deleting fields immediately crashes existing consumers deserializing either old historical events or new events."
       }
     },
-    "wisdomTakeaway": "In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old."
+    "wisdomTakeaway": "In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old.",
+    "sources": [
+      {
+        "title": "What do you mean by 'Event-Driven'?",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/articles/201701-event-driven.html"
+      },
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      }
+    ]
   },
   {
     "id": "INT-06",
@@ -201,7 +266,19 @@
         "whyWrong": "Orchestration actually sends command + reply messages through the coordinator (similar or slightly more hops than direct choreography); you choose orchestration for clarity and control, not fewer packets."
       }
     },
-    "wisdomTakeaway": "Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants."
+    "wisdomTakeaway": "Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants.",
+    "sources": [
+      {
+        "title": "Pattern: Saga",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/saga.html"
+      },
+      {
+        "title": "Enterprise Integration Patterns",
+        "author": "Gregor Hohpe & Bobby Woolf",
+        "url": "https://www.enterpriseintegrationpatterns.com/"
+      }
+    ]
   },
   {
     "id": "INT-07",
@@ -235,7 +312,19 @@
         "whyWrong": "HTTP/2 multiplexes TCP frames over one socket, which doesn't stop slow PDF work from holding every application worker thread on the shared pool."
       }
     },
-    "wisdomTakeaway": "Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads."
+    "wisdomTakeaway": "Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads.",
+    "sources": [
+      {
+        "title": "Bulkhead pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+      },
+      {
+        "title": "Timeouts, retries, and backoff with jitter",
+        "author": "Marc Brooker (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter"
+      }
+    ]
   },
   {
     "id": "INT-08",
@@ -269,7 +358,19 @@
         "whyWrong": "0.8% of your customer base completely frozen for days is still a major incident, and you still lack a mechanism to recover the broken message."
       }
     },
-    "wisdomTakeaway": "Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay)."
+    "wisdomTakeaway": "Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay).",
+    "sources": [
+      {
+        "title": "Enterprise Integration Patterns",
+        "author": "Gregor Hohpe & Bobby Woolf",
+        "url": "https://www.enterpriseintegrationpatterns.com/"
+      },
+      {
+        "title": "Pattern: Transactional Outbox",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+      }
+    ]
   },
   {
     "id": "INT-09",
@@ -303,7 +404,19 @@
         "whyWrong": "14 services polling every 5 seconds wastes bandwidth, increases latency, and still hammers `ContentService`."
       }
     },
-    "wisdomTakeaway": "If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede."
+    "wisdomTakeaway": "If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede.",
+    "sources": [
+      {
+        "title": "What do you mean by 'Event-Driven'?",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/articles/201701-event-driven.html"
+      },
+      {
+        "title": "Enterprise Integration Patterns",
+        "author": "Gregor Hohpe & Bobby Woolf",
+        "url": "https://www.enterpriseintegrationpatterns.com/"
+      }
+    ]
   },
   {
     "id": "INT-10",
@@ -337,6 +450,18 @@
         "whyWrong": "5 staging environments multiply cloud cost and environment-drift maintenance while each individual 90-minute run still flakes 35% of the time."
       }
     },
-    "wisdomTakeaway": "Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck."
+    "wisdomTakeaway": "Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck.",
+    "sources": [
+      {
+        "title": "Consumer-Driven Contract Testing (Pact Docs)",
+        "author": "Pact Foundation",
+        "url": "https://docs.pact.io/"
+      },
+      {
+        "title": "Microservices",
+        "author": "James Lewis & Martin Fowler",
+        "url": "https://martinfowler.com/articles/microservices.html"
+      }
+    ]
   }
 ]

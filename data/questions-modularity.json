@@ -31,7 +31,24 @@
         "whyWrong": "GraphQL Federation only simplifies client querying; backend feature changes still require 6 coordinated PRs and shared DB migrations."
       }
     },
-    "wisdomTakeaway": "If a single business change consistently requires synchronized releases across multiple services, you don't have microservices—you have a distributed monolith."
+    "wisdomTakeaway": "If a single business change consistently requires synchronized releases across multiple services, you don't have microservices—you have a distributed monolith.",
+    "sources": [
+      {
+        "title": "MonolithFirst",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+      },
+      {
+        "title": "Microservices",
+        "author": "James Lewis & Martin Fowler",
+        "url": "https://martinfowler.com/articles/microservices.html"
+      },
+      {
+        "title": "Decompose by Business Capability",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+      }
+    ]
   },
   {
     "id": "MOD-02",
@@ -65,7 +82,19 @@
         "whyWrong": "A Lambda function whose handler still entangles Stripe SDK, HTTP parsing, and pricing math has the exact same coupling problem—now with cold starts."
       }
     },
-    "wisdomTakeaway": "Your business logic should have zero idea whether it was invoked by HTTP, Kafka, or a CLI test—and zero idea whether data lives in Postgres or memory."
+    "wisdomTakeaway": "Your business logic should have zero idea whether it was invoked by HTTP, Kafka, or a CLI test—and zero idea whether data lives in Postgres or memory.",
+    "sources": [
+      {
+        "title": "Hexagonal Architecture (Ports and Adapters)",
+        "author": "Alistair Cockburn",
+        "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+      },
+      {
+        "title": "Bounded Context",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/BoundedContext.html"
+      }
+    ]
   },
   {
     "id": "MOD-03",
@@ -99,7 +128,19 @@
         "whyWrong": "DRY is valuable *within* a single cohesive concept (e.g., one authoritative tax calculation formula), just harmful when forcing artificial unification *across* bounded contexts."
       }
     },
-    "wisdomTakeaway": "A little duplication across bounded contexts is far cheaper than the wrong shared abstraction."
+    "wisdomTakeaway": "A little duplication across bounded contexts is far cheaper than the wrong shared abstraction.",
+    "sources": [
+      {
+        "title": "Bounded Context",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/BoundedContext.html"
+      },
+      {
+        "title": "Decompose by Business Capability",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+      }
+    ]
   },
   {
     "id": "MOD-04",
@@ -133,7 +174,14 @@
         "whyWrong": "Short positional tuples invite silent transposition bugs (swapping `amount` and `user_id` if both are ints) and hurt readability across module borders."
       }
     },
-    "wisdomTakeaway": "Push module interfaces toward weak, static coupling (explicit types and names) and eliminate hidden execution-order assumptions."
+    "wisdomTakeaway": "Push module interfaces toward weak, static coupling (explicit types and names) and eliminate hidden execution-order assumptions.",
+    "sources": [
+      {
+        "title": "Connascence (Software Engineering)",
+        "author": "Meilir Page-Jones (via Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/Connascence"
+      }
+    ]
   },
   {
     "id": "MOD-05",
@@ -167,7 +215,19 @@
         "whyWrong": "Two codebases mutating overlapping legacy tables with different invariants corrupts financial state and makes rollback impossible."
       }
     },
-    "wisdomTakeaway": "Never bet the business on a big-bang cutover—strangle legacy systems one vertical slice at a time with instant rollback."
+    "wisdomTakeaway": "Never bet the business on a big-bang cutover—strangle legacy systems one vertical slice at a time with instant rollback.",
+    "sources": [
+      {
+        "title": "Strangler Fig Application",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+      },
+      {
+        "title": "Branch by Abstraction",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/BranchByAbstraction.html"
+      }
+    ]
   },
   {
     "id": "MOD-06",
@@ -201,7 +261,19 @@
         "whyWrong": "Frontend validation is UX only; skipping backend validation opens security and data-corruption vulnerabilities."
       }
     },
-    "wisdomTakeaway": "Organize folders by business capability and use case, not by technical layer—optimize for how features actually change."
+    "wisdomTakeaway": "Organize folders by business capability and use case, not by technical layer—optimize for how features actually change.",
+    "sources": [
+      {
+        "title": "Decompose by Business Capability",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+      },
+      {
+        "title": "Connascence (Software Engineering)",
+        "author": "Meilir Page-Jones (via Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/Connascence"
+      }
+    ]
   },
   {
     "id": "MOD-07",
@@ -235,7 +307,19 @@
         "whyWrong": "Human approval queues kill velocity without giving instant local IDE/CI feedback."
       }
     },
-    "wisdomTakeaway": "Good intentions don't preserve modular boundaries—automated CI fitness functions do."
+    "wisdomTakeaway": "Good intentions don't preserve modular boundaries—automated CI fitness functions do.",
+    "sources": [
+      {
+        "title": "Fitness Function-Driven Development",
+        "author": "Thoughtworks",
+        "url": "https://www.thoughtworks.com/insights/articles/fitness-function-driven-development"
+      },
+      {
+        "title": "Hexagonal Architecture (Ports and Adapters)",
+        "author": "Alistair Cockburn",
+        "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+      }
+    ]
   },
   {
     "id": "MOD-08",
@@ -269,7 +353,19 @@
         "whyWrong": "Serverless functions built by siloed UI/API/DB teams simply reproduce the same cross-team handoff bottlenecks."
       }
     },
-    "wisdomTakeaway": "Architecture and org design are two halves of one system—if your teams are sliced horizontally, your system will fight vertical modularity."
+    "wisdomTakeaway": "Architecture and org design are two halves of one system—if your teams are sliced horizontally, your system will fight vertical modularity.",
+    "sources": [
+      {
+        "title": "How Do Committees Invent? (Conway's Law, 1968)",
+        "author": "Melvin E. Conway",
+        "url": "https://www.melconway.com/Home/Conways_Law.html"
+      },
+      {
+        "title": "Decompose by Business Capability",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/decomposition/decompose-by-business-capability.html"
+      }
+    ]
   },
   {
     "id": "MOD-09",
@@ -303,7 +399,19 @@
         "whyWrong": "Moving speculative base classes to another repo makes debugging and evolving them even more painful."
       }
     },
-    "wisdomTakeaway": "Duplication is cheap; the wrong abstraction is expensive. Abstract at real boundaries and real points of variation."
+    "wisdomTakeaway": "Duplication is cheap; the wrong abstraction is expensive. Abstract at real boundaries and real points of variation.",
+    "sources": [
+      {
+        "title": "MonolithFirst",
+        "author": "Martin Fowler",
+        "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+      },
+      {
+        "title": "Connascence (Software Engineering)",
+        "author": "Meilir Page-Jones (via Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/Connascence"
+      }
+    ]
   },
   {
     "id": "MOD-10",
@@ -337,6 +445,18 @@
         "whyWrong": "Core releases stay blocked by tenant rules, and every new tenant grows conditional spaghetti inside shared business paths."
       }
     },
-    "wisdomTakeaway": "When core logic accumulates `if (customer == X)` branches, extract a stable Extension SPI and isolate custom behavior outside the core blast radius."
+    "wisdomTakeaway": "When core logic accumulates `if (customer == X)` branches, extract a stable Extension SPI and isolate custom behavior outside the core blast radius.",
+    "sources": [
+      {
+        "title": "Hexagonal Architecture (Ports and Adapters)",
+        "author": "Alistair Cockburn",
+        "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+      },
+      {
+        "title": "Bulkhead pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+      }
+    ]
   }
 ]

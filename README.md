@@ -1,30 +1,23 @@
-# Systems Mastery Academy: Knowledge & Wisdom in Architecture
+# Systems Mastery — Monograph & Distractor Analysis Lab
 
-**Live Interactive Course & Distractor Analysis Lab:**
+**Live Website (GitHub Pages):**
 [https://anshuk-dev.github.io/systems-mastery-academy/](https://anshuk-dev.github.io/systems-mastery-academy/)
 
-> A Staff / Principal Engineer-level curriculum and scenario-based assessment bank built to develop both **Knowledge** (first-principles laws, patterns, and mechanisms) and **Wisdom** (architectural judgment, trade-offs, failure modes, and spotting plausible traps) across **System Integration**, **Modular Architecture**, **System Optimization**, and **System Scalability**.
+> A source-verified Staff / Principal Systems Engineering curriculum and scenario-based Q&A lab covering **System Integration**, **Modular Architecture**, **System Optimization**, and **System Scalability** — grounded in original papers, engineering postmortems, and architecture canon.
 
 ---
 
-## Live Web App Features
+## Design & Engineering Foundation
 
-Open **[https://anshuk-dev.github.io/systems-mastery-academy/](https://anshuk-dev.github.io/systems-mastery-academy/)** for:
-
-- **Course Modules (5 Pillars, 13 Deep Lessons):** Side-by-side **Knowledge vs. Wisdom** breakdowns, architectural trade-off matrices, anti-pattern warnings, and Principal Engineer rules of thumb with `localStorage` completion tracking.
-- **Q&A + Distractor Analysis Lab (50 Production Scenarios, 150 Distractor Analyses):**
-  - Filter by Pillar, Difficulty (`Intermediate`, `Senior`, `Staff / Principal`), keyword search, or Missed/Bookmarked review.
-  - **Practice Mode:** Instant answer verification with deep explanation AND option-by-option **Distractor Analysis** explaining the exact misconception/trap behind every wrong option (`A`, `B`, `C`, `D`).
-  - **Exam Mode:** Batch diagnostic scorecard broken down by pillar with full post-exam distractor review.
-- **Systems Physics Calculators:** Live interactive calculators for **Little's Law (`L = λ · W`)**, **Tail Latency Amplification (`1 - p^N`)**, and **Gunther's Universal Scalability Law (`C(N)`)**.
+- **UI Design Direction:** Redesigned using the **`frontend-design`** skill from [`anthropics/skills`](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md) — adopting an archival *Systems Engineering Monograph* editorial aesthetic (`Newsreader` + `IBM Plex Sans` + `IBM Plex Mono`, warm paper & slate drafting themes, hairline structural grids, zero generic SaaS gradient templates).
+- **Web Interface & Accessibility Audit:** Follows [`vercel-labs/agent-skills` (`web-design-guidelines`)](https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines) — skip links, `:focus-visible` outlines, `prefers-reduced-motion` support, `tabular-nums` telemetry readouts, keyboard shortcuts (`A–D` / `1–4`, `←`/`→`), URL hash deep-linking, and `aria-live` feedback.
+- **100% Source-Verified Content:** Every lesson and all 50 scenario Q&As link directly to live-verified primary engineering literature (40 canonical references).
 
 ---
 
-## Curriculum & GitHub Markdown Index
+## Curriculum & Assessment Index
 
-Every module and Q&A bank is also readable directly in GitHub Markdown:
-
-| # | Pillar | Core Curriculum | Scenario Q&A + Distractor Analysis |
+| # | Pillar | Curriculum Monograph | Q&A + Distractor Analysis |
 |---|---|---|---|
 | **01** | **System Integration** | [01-integration.md](curriculum/01-integration.md) | [01-integration-qa.md](assessments/01-integration-qa.md) (10 Qs) |
 | **02** | **Modular Architecture** | [02-modularity.md](curriculum/02-modularity.md) | [02-modularity-qa.md](assessments/02-modularity-qa.md) (10 Qs) |
@@ -34,41 +27,18 @@ Every module and Q&A bank is also readable directly in GitHub Markdown:
 
 ---
 
-## Pillar Breakdown
+## Key Primary Sources Cited Across the Course
 
-### 01. System Integration
-- **Lesson 1.1:** Integration Styles & Coupling Axes (Temporal, Spatial, Semantic, Operational)
-- **Lesson 1.2:** Reliability Across Unreliable Networks (Idempotency, Dual-Write, Transactional Outbox + CDC, Sagas, DLQs)
-- **Lesson 1.3:** Contracts, Evolution & Fault Isolation (Anti-Corruption Layers, Expand-Contract, Circuit Breakers, Bulkheads, Jittered Retries)
-
-### 02. Modular Architecture
-- **Lesson 2.1:** Cohesion, Coupling & Connascence (Bounded Contexts, Vertical Slices, Rule of Three)
-- **Lesson 2.2:** Hexagonal Boundaries & Modular Monoliths (Ports & Adapters, Avoiding Distributed Monoliths)
-- **Lesson 2.3:** Evolutionary Architecture, Conway's Law & Migrations (Strangler Fig, Branch by Abstraction, CI Fitness Functions)
-
-### 03. System Optimization
-- **Lesson 3.1:** Performance Physics, Little's Law & Tail Latency (USE/RED Methods, Flamegraphs, Hedged Reads)
-- **Lesson 3.2:** Compute, Memory, I/O & Connection Efficiency (PgBouncer Pool Sizing, Event Loop Non-Blocking, Batching)
-- **Lesson 3.3:** Database Access & Caching Mastery (Composite/Covering Indexes, Keyset Pagination, Singleflight Stampede & Negative-Cache Penetration Defense)
-
-### 04. System Scalability
-- **Lesson 4.1:** Scalability Laws & Bottleneck Modeling (Amdahl's Law, Gunther's Universal Scalability Law `α` & `β`)
-- **Lesson 4.2:** Data Partitioning, Replication & Consistency (Skew-Aware Sharding, Consistent Hashing, Read-Your-Writes LSN Pinning, CQRS)
-- **Lesson 4.3:** Backpressure, Load Shedding & Geo-Distribution (Token/Leaky Buckets, Priority Shedding, Cellular Home-Region Multi-Region)
-
-### 05. Integrated Systems Capstone
-- **Synthesis:** Cross-Pillar Trade-offs, Metastable Failures, RFC Risk Triage & Reversibility Framework
+- **System Integration:** [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/) (Hohpe & Woolf), [Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html) & [Saga Pattern](https://microservices.io/patterns/data/saga.html) (Chris Richardson), [Stripe Idempotency](https://stripe.com/blog/idempotency) (Brandur Leach), [AWS Builders' Library: Timeouts, retries, and backoff with jitter](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter) (Marc Brooker), [Pact Contract Testing](https://docs.pact.io/).
+- **Modular Architecture:** [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) (Alistair Cockburn), [How Do Committees Invent? (Conway's Law, 1968)](https://www.melconway.com/Home/Conways_Law.html) (Melvin Conway), [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) & [Strangler Fig Application](https://martinfowler.com/bliki/StranglerFigApplication.html) (Martin Fowler), [Connascence](https://en.wikipedia.org/wiki/Connascence) (Meilir Page-Jones), [Fitness Function-Driven Development](https://www.thoughtworks.com/insights/articles/fitness-function-driven-development).
+- **System Optimization:** [The Tail at Scale](https://research.google/pubs/the-tail-at-scale/) (Dean & Barroso), [Little's Law](https://en.wikipedia.org/wiki/Little%27s_law), [The USE Method](https://www.brendangregg.com/usemethod.html) (Brendan Gregg), [The RED Method](https://grafana.com/blog/the-red-method-how-to-instrument-your-services/) (Tom Wilkie), [HikariCP: About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) (Brett Wooldridge), [Use The Index, Luke: No Offset](https://use-the-index-luke.com/no-offset) (Markus Winand), [XFetch Cache Stampede Paper](https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf) (Vattani et al.).
+- **System Scalability:** [Universal Scalability Law](https://arxiv.org/abs/0808.1431) (Neil J. Gunther), [Amdahl's Law](https://en.wikipedia.org/wiki/Amdahl%27s_law), [Consistent Hashing and Random Trees](https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf) (Karger et al.), [Designing Data-Intensive Applications](https://dataintensive.net/) (Martin Kleppmann), [AWS Builders' Library: Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) (David Yanacek), [Scaling your API with rate limiters](https://stripe.com/blog/rate-limiters) (Stripe), [Metastable Failures in Distributed Systems](https://charap.co/metastable-failures-in-distributed-systems/) (Bronson et al.).
 
 ---
 
-## Local Development & Verification
+## Local Verification
 
 ```bash
-# Validate JSON schema & regenerate data/course-bundle.js + curriculum/ + assessments/
 python3 scripts/build_assets.py
-
-# Serve locally
 python3 -m http.server 8080
 ```
-
-Then visit `http://localhost:8080`.

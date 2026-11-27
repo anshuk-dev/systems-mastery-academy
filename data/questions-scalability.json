@@ -31,7 +31,19 @@
         "whyWrong": "Powers of two are standard in consistent hashing and memory alignment and do not trigger quadratic collision spikes."
       }
     },
-    "wisdomTakeaway": "If adding nodes makes your cluster slower, you have a coherency tax (`beta > 0`)—stop adding machines and remove the global cross-node coordination."
+    "wisdomTakeaway": "If adding nodes makes your cluster slower, you have a coherency tax (`beta > 0`)—stop adding machines and remove the global cross-node coordination.",
+    "sources": [
+      {
+        "title": "A General Theory of Computational Scalability Based on Rational Functions (USL)",
+        "author": "Neil J. Gunther (arXiv:0808.1431)",
+        "url": "https://arxiv.org/abs/0808.1431"
+      },
+      {
+        "title": "Amdahl's Law (AFIPS 1967)",
+        "author": "Gene Amdahl (via Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+      }
+    ]
   },
   {
     "id": "SCA-02",
@@ -65,7 +77,19 @@
         "whyWrong": "Virtual nodes balance key ranges across physical servers; a single key (`MegaCorp`) still maps to only one vnode on one physical server at a time."
       }
     },
-    "wisdomTakeaway": "Uniform hashing only balances keys, never skew—design shard keys for cardinality AND volume distribution, especially with enterprise whales."
+    "wisdomTakeaway": "Uniform hashing only balances keys, never skew—design shard keys for cardinality AND volume distribution, especially with enterprise whales.",
+    "sources": [
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      },
+      {
+        "title": "Consistent Hashing and Random Trees (STOC 1997)",
+        "author": "David Karger et al. (MIT / Princeton CS)",
+        "url": "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf"
+      }
+    ]
   },
   {
     "id": "SCA-03",
@@ -99,7 +123,14 @@
         "whyWrong": "`sha256(key) % 9` still remaps ~90% of keys compared to `sha256(key) % 10`."
       }
     },
-    "wisdomTakeaway": "Never use `hash(key) % N` for stateful partitions or caches where N can change—use consistent hashing with virtual nodes."
+    "wisdomTakeaway": "Never use `hash(key) % N` for stateful partitions or caches where N can change—use consistent hashing with virtual nodes.",
+    "sources": [
+      {
+        "title": "Consistent Hashing and Random Trees (STOC 1997)",
+        "author": "David Karger et al. (MIT / Princeton CS)",
+        "url": "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf"
+      }
+    ]
   },
   {
     "id": "SCA-04",
@@ -133,7 +164,14 @@
         "whyWrong": "Forcing every user to stare at a 5-second spinner feels broken and still fails whenever replication lag exceeds 5 seconds."
       }
     },
-    "wisdomTakeaway": "Don't make the whole database synchronous just for Read-Your-Writes—pin the mutating user's session to the primary or track their commit LSN."
+    "wisdomTakeaway": "Don't make the whole database synchronous just for Read-Your-Writes—pin the mutating user's session to the primary or track their commit LSN.",
+    "sources": [
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      }
+    ]
   },
   {
     "id": "SCA-05",
@@ -167,7 +205,19 @@
         "whyWrong": "Immediate retries during overload amplify traffic into total collapse."
       }
     },
-    "wisdomTakeaway": "Under extreme overload, failing fast for excess low-priority load is the only way to keep critical paths fast and alive."
+    "wisdomTakeaway": "Under extreme overload, failing fast for excess low-priority load is the only way to keep critical paths fast and alive.",
+    "sources": [
+      {
+        "title": "Using load shedding to avoid overload",
+        "author": "David Yanacek (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+      },
+      {
+        "title": "Metastable Failures in Distributed Systems (HotOS 2021)",
+        "author": "Bronson, Aghayev, Charapko & Zhu",
+        "url": "https://charap.co/metastable-failures-in-distributed-systems/"
+      }
+    ]
   },
   {
     "id": "SCA-06",
@@ -201,7 +251,19 @@
         "whyWrong": "30 independent in-memory HashMaps let an attacker send `30 * 100 = 3,000` requests/min under round-robin load balancing."
       }
     },
-    "wisdomTakeaway": "Never use uncoordinated per-pod counters or naive fixed windows for strict rate limits—use atomic Token Bucket or Sliding Window limiters."
+    "wisdomTakeaway": "Never use uncoordinated per-pod counters or naive fixed windows for strict rate limits—use atomic Token Bucket or Sliding Window limiters.",
+    "sources": [
+      {
+        "title": "Scaling your API with rate limiters",
+        "author": "Paul Tarjan (Stripe Engineering)",
+        "url": "https://stripe.com/blog/rate-limiters"
+      },
+      {
+        "title": "Rate Limiting Algorithms",
+        "author": "Redis Glossary",
+        "url": "https://redis.io/glossary/rate-limiting/"
+      }
+    ]
   },
   {
     "id": "SCA-07",
@@ -235,7 +297,24 @@
         "whyWrong": "Elasticsearch lacks multi-row ACID transactions, foreign keys, and strict durable isolation needed for payment/inventory invariants."
       }
     },
-    "wisdomTakeaway": "When search/analytics queries start hurting transactional writes, don't overload OLTP with 20 indexes—project an async CQRS read model."
+    "wisdomTakeaway": "When search/analytics queries start hurting transactional writes, don't overload OLTP with 20 indexes—project an async CQRS read model.",
+    "sources": [
+      {
+        "title": "CQRS pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs"
+      },
+      {
+        "title": "Pattern: Transactional Outbox",
+        "author": "Chris Richardson (microservices.io)",
+        "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+      },
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      }
+    ]
   },
   {
     "id": "SCA-08",
@@ -269,7 +348,14 @@
         "whyWrong": "Static CDN assets don't fix 200ms dynamic API round trips to US-East or keep EU user data inside the EU."
       }
     },
-    "wisdomTakeaway": "Prefer home-region cellular isolation over global multi-master write complexity—respect both the speed of light and GDPR."
+    "wisdomTakeaway": "Prefer home-region cellular isolation over global multi-master write complexity—respect both the speed of light and GDPR.",
+    "sources": [
+      {
+        "title": "Designing Data-Intensive Applications",
+        "author": "Martin Kleppmann",
+        "url": "https://dataintensive.net/"
+      }
+    ]
   },
   {
     "id": "SCA-09",
@@ -303,7 +389,19 @@
         "whyWrong": "Login traffic spikes CPU, memory, and connections—disk usage barely moves during authentication bursts."
       }
     },
-    "wisdomTakeaway": "Reactive auto-scaling handles gradual diurnal curves, never vertical 9:00 AM cliff spikes—pre-warm predictably and design fast startup."
+    "wisdomTakeaway": "Reactive auto-scaling handles gradual diurnal curves, never vertical 9:00 AM cliff spikes—pre-warm predictably and design fast startup.",
+    "sources": [
+      {
+        "title": "Using load shedding to avoid overload",
+        "author": "David Yanacek (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+      },
+      {
+        "title": "The USE Method",
+        "author": "Brendan Gregg",
+        "url": "https://www.brendangregg.com/usemethod.html"
+      }
+    ]
   },
   {
     "id": "SCA-10",
@@ -337,6 +435,18 @@
         "whyWrong": "5,000 concurrent video transcodes on one pod immediately exhaust both RAM and CPU cores."
       }
     },
-    "wisdomTakeaway": "An unbounded queue is just a delayed OOM crash; every buffer must be bounded, durable if critical, and capable of signaling backpressure."
+    "wisdomTakeaway": "An unbounded queue is just a delayed OOM crash; every buffer must be bounded, durable if critical, and capable of signaling backpressure.",
+    "sources": [
+      {
+        "title": "Using load shedding to avoid overload",
+        "author": "David Yanacek (AWS Builders' Library)",
+        "url": "https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload"
+      },
+      {
+        "title": "Bulkhead pattern",
+        "author": "Microsoft Azure Architecture Center",
+        "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+      }
+    ]
   }
 ]

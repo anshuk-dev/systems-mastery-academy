@@ -38,6 +38,12 @@ Modularity is not about splitting one repo into 40 microservices. It is about hi
 
 > **Rule of Thumb:** Duplicate code before coupling domains. Wait for three real divergent use cases (Rule of Three) before extracting a shared abstraction.
 
+### Verified Primary Sources
+
+- [Connascence (Software Engineering)](https://en.wikipedia.org/wiki/Connascence) — Meilir Page-Jones (via Wikipedia)
+- [Bounded Context](https://martinfowler.com/bliki/BoundedContext.html) — Martin Fowler
+- [Decompose by Business Capability](https://microservices.io/patterns/decomposition/decompose-by-business-capability.html) — Chris Richardson (microservices.io)
+
 ---
 
 ## Hexagonal Boundaries & Modular Monoliths (30 min)
@@ -59,7 +65,7 @@ Modularity is not about splitting one repo into 40 microservices. It is about hi
 
 | Approach | Pros | Cons | When to Use |
 |---|---|---|---|
-| **Modular Monolith** | ACID transactions inside modules, zero network serialization tax, single CI/CD, trivial refactoring across boundaries. | Shared failure domain (OOM kills process), single language/runtime, requires discipline to keep boundaries clean. | 90% of early-to-mid scale systems and teams under ~50-80 engineers. |
+| **Modular Monolith** | ACID transactions inside modules, zero network serialization tax, single CI/CD, trivial refactoring across boundaries. | Shared failure domain (OOM kills process), single language/runtime, requires discipline to keep boundaries clean. | Early-to-mid scale systems and teams that do not yet face independent release or scaling bottlenecks (Fowler's MonolithFirst). |
 | **Microservices** | Independent deployment velocity for large orgs, fault/resource isolation, polyglot tech when genuinely needed, independent horizontal scaling. | Distributed systems tax (tracing, service mesh, eventual consistency, contract testing, DevOps overhead). | Distinct scaling/security boundaries or 5+ autonomous teams stepping on each other's release cadence. |
 
 ### Common Anti-Patterns
@@ -69,6 +75,12 @@ Modularity is not about splitting one repo into 40 microservices. It is about hi
 - Allowing Domain Core to import HTTP, SQL, or framework annotations.
 
 > **Rule of Thumb:** If two services always have to be deployed together to ship one feature, they are one logical module pretending to be two.
+
+### Verified Primary Sources
+
+- [Hexagonal Architecture (Ports and Adapters)](https://alistair.cockburn.us/hexagonal-architecture/) — Alistair Cockburn
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html) — Martin Fowler
+- [Microservices](https://martinfowler.com/articles/microservices.html) — James Lewis & Martin Fowler
 
 ---
 
@@ -101,5 +113,12 @@ Modularity is not about splitting one repo into 40 microservices. It is about hi
 - Unmonitored feature flags left behind after migrations, creating exponential test matrices.
 
 > **Rule of Thumb:** Never start a migration without knowing how you will verify parity and how you will roll back in under 5 minutes.
+
+### Verified Primary Sources
+
+- [How Do Committees Invent? (Conway's Law, 1968)](https://www.melconway.com/Home/Conways_Law.html) — Melvin E. Conway
+- [Strangler Fig Application](https://martinfowler.com/bliki/StranglerFigApplication.html) — Martin Fowler
+- [Branch by Abstraction](https://martinfowler.com/bliki/BranchByAbstraction.html) — Martin Fowler
+- [Fitness Function-Driven Development](https://www.thoughtworks.com/insights/articles/fitness-function-driven-development) — Thoughtworks
 
 ---

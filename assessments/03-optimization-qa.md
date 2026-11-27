@@ -1,6 +1,6 @@
 # Assessment & Distractor Analysis — 03: System Optimization
 
-10 scenario-based engineering questions with detailed explanations and option-by-option distractor analysis.
+10 scenario-based engineering questions grounded in verified primary engineering literature.
 
 ---
 
@@ -16,7 +16,7 @@
 - **D.** The CPU hit 100% computing TLS checksums.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -30,6 +30,11 @@
 - **D (Distractor — _Confusing I/O wait saturation with CPU saturation_):** Worker threads waiting on slow 2s socket I/O use near-zero CPU while completely blocking request intake.
 
 > **Wisdom Takeaway:** Slow dependencies are deadlier than fast crashes: rising W multiplies concurrency L until every thread pool upstream suffocates.
+
+#### Verified Primary Sources
+
+- [Little's Law (Operations Research, 1961)](https://en.wikipedia.org/wiki/Little%27s_law) — John D. C. Little (via Wikipedia)
+- [Using load shedding to avoid overload](https://builder.aws.com/content/3Eun1EEyX6p2e3VYNyRLSJzLuMV/using-load-shedding-to-avoid-overload) — David Yanacek (AWS Builders' Library)
 
 </details>
 
@@ -47,7 +52,7 @@
 - **D.** Lower the aggregator's shard timeout to 10ms and return empty results from timed-out shards.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -61,6 +66,10 @@
 - **D (Distractor — _Sacrificing result correctness via ultra-aggressive timeouts_):** A 10ms timeout drops valid shards routinely, degrading search relevance and user trust.
 
 > **Wisdom Takeaway:** At scale, the average doesn't matter—when fanning out across N components, everyone experiences the tail.
+
+#### Verified Primary Sources
+
+- [The Tail at Scale (CACM, 2013)](https://research.google/pubs/the-tail-at-scale/) — Jeffrey Dean & Luiz André Barroso (Google)
 
 </details>
 
@@ -78,7 +87,7 @@
 - **D.** Increase PostgreSQL `max_connections` to 10,000 and double pod count to 160.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -92,6 +101,10 @@
 - **D (Distractor — _Removing the safety cap and adding more attackers_):** Raising `max_connections` to 10,000 and doubling pods makes lock contention and RAM exhaustion (each Postgres backend consumes several MB) catastrophically worse.
 
 > **Wisdom Takeaway:** More database connections almost never equal more database throughput—a 16-core DB runs fastest with dozens of active connections, not thousands.
+
+#### Verified Primary Sources
+
+- [About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) — Brett Wooldridge (HikariCP Wiki)
 
 </details>
 
@@ -109,7 +122,7 @@
 - **D.** Add 5 more Redis read replicas.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -123,6 +136,11 @@
 - **D (Distractor — _Scaling the cache layer when the problem is a cache miss_):** All 5 Redis replicas expire the same key at the exact same second and still forward 15,000 misses to Postgres.
 
 > **Wisdom Takeaway:** Never let 10,000 concurrent cache misses each independently ask the database the exact same question—coalesce with Singleflight or refresh before expiry.
+
+#### Verified Primary Sources
+
+- [Optimal Probabilistic Cache Stampede Prevention (XFetch)](https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf) — Vattani, Chierichetti & Lowenstein (2015)
+- [Cache-Aside pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside) — Microsoft Azure Architecture Center
 
 </details>
 
@@ -140,7 +158,7 @@
 - **D.** Replace `LIMIT 20` with `LIMIT 1000` so clients fetch fewer pages.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -154,6 +172,11 @@
 - **D (Distractor — _Increasing payload size and initial load latency_):** Fetching 1,000 rows on initial page load wastes bandwidth, memory, and DB I/O when users typically read only the first 20 items.
 
 > **Wisdom Takeaway:** For feeds, logs, and APIs over large datasets, `OFFSET` is a ticking latency bomb—default to cursor/keyset pagination.
+
+#### Verified Primary Sources
+
+- [We Need Tooling for Keyset Pagination (No Offset)](https://use-the-index-luke.com/no-offset) — Markus Winand (Use The Index, Luke)
+- [Concatenated Indexes (Leftmost Prefix Rule)](https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys) — Markus Winand (Use The Index, Luke)
 
 </details>
 
@@ -171,7 +194,7 @@
 - **D.** Convert `status` from `VARCHAR` to `TEXT`.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -185,6 +208,11 @@
 - **D (Distractor — _Irrelevant column type swap_):** In PostgreSQL `VARCHAR` and `TEXT` share the exact same underlying varlena storage and B-Tree mechanics.
 
 > **Wisdom Takeaway:** Design composite indexes like phone books: equality columns first, range/sort columns next, and `INCLUDE` payload columns to eliminate table heap hops.
+
+#### Verified Primary Sources
+
+- [Concatenated Indexes (Leftmost Prefix Rule)](https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys) — Markus Winand (Use The Index, Luke)
+- [Index-Only Scan / Covering Indexes](https://use-the-index-luke.com/sql/clustering/index-only-scan-covering-index) — Markus Winand (Use The Index, Luke)
 
 </details>
 
@@ -202,7 +230,7 @@
 - **D.** Increase database CPU cores from 4 to 64 so each of the 80 queries runs faster.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -216,6 +244,11 @@
 - **D (Distractor — _Scaling CPU for a sequential network-RTT bottleneck_):** Even if each SQL query ran in 0.1ms on 64 cores, 160 sequential network round trips over TCP still burn hundreds of milliseconds.
 
 > **Wisdom Takeaway:** Never optimize by intuition: look at a trace/flamegraph first, and crush network round trips (N+1s) before touching micro-benchmarks.
+
+#### Verified Primary Sources
+
+- [The USE Method](https://www.brendangregg.com/usemethod.html) — Brendan Gregg
+- [The RED Method: How to Instrument Your Services](https://grafana.com/blog/the-red-method-how-to-instrument-your-services/) — Tom Wilkie (Grafana Labs)
 
 </details>
 
@@ -233,7 +266,7 @@
 - **D.** Write-Behind lag; switch Redis to AOF `fsync=always`.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -247,6 +280,11 @@
 - **D (Distractor — _Tuning Redis disk persistence for a read-miss attack_):** AOF `fsync=always` slows down Redis writes and has zero effect on read-miss penetration.
 
 > **Wisdom Takeaway:** Your cache must protect the database from 'not found' floods too—validate shapes early, negative-cache misses briefly, or filter with a Bloom filter.
+
+#### Verified Primary Sources
+
+- [Cache-Aside pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside) — Microsoft Azure Architecture Center
+- [Optimal Probabilistic Cache Stampede Prevention (XFetch)](https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf) — Vattani, Chierichetti & Lowenstein (2015)
 
 </details>
 
@@ -264,7 +302,7 @@
 - **D.** Add more async `Promise.all()` wrappers around the synchronous PDF function.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **B**
 
@@ -278,6 +316,11 @@
 - **D (Distractor — _`Promise.all` illusion of parallelism_):** Wrapping synchronous CPU code in `async/await` or `Promise.all` still executes sequentially on the single main JS thread.
 
 > **Wisdom Takeaway:** Event-loop architectures scale I/O concurrency brilliantly and collapse catastrophically the moment someone puts synchronous CPU work on the loop.
+
+#### Verified Primary Sources
+
+- [The USE Method](https://www.brendangregg.com/usemethod.html) — Brendan Gregg
+- [The RED Method: How to Instrument Your Services](https://grafana.com/blog/the-red-method-how-to-instrument-your-services/) — Tom Wilkie (Grafana Labs)
 
 </details>
 
@@ -295,7 +338,7 @@
 - **D.** Store every single sensor reading as a separate `.json` file on NFS.
 
 <details>
-<summary>Show Answer, Explanation & Distractor Analysis</summary>
+<summary>Show Answer, Explanation, Distractor Analysis &amp; Verified Sources</summary>
 
 **Correct Answer:** **A**
 
@@ -309,6 +352,11 @@
 - **D (Distractor — _Catastrophic metadata I/O explosion_):** Creating 50,000 tiny files/sec on NFS obliterates filesystem metadata ops and makes querying impossible.
 
 > **Wisdom Takeaway:** When write IOPS or network RTT bottlenecks ingestion, micro-batch with a tight `(max_count, max_wait_ms)` bound to trade milliseconds for orders-of-magnitude throughput.
+
+#### Verified Primary Sources
+
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann
+- [About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) — Brett Wooldridge (HikariCP Wiki)
 
 </details>
 
