@@ -1,0 +1,1702 @@
+[
+  {
+    "id": "INT-01",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Dual-Write Problem & Transactional Outbox",
+    "scenario": "Your Order Service creates an order in PostgreSQL, commits the transaction, and then calls `kafkaProducer.send(orderCreatedEvent)` on the next line. During a broker blip or pod OOM right after DB commit, ~0.3% of paid orders never reach the Warehouse Service, causing unshipped orders.",
+    "question": "Which architectural change permanently eliminates this partial-state inconsistency without introducing distributed 2PC locks?",
+    "options": [
+      "Wrap the PostgreSQL commit and the Kafka `send()` call inside a single `try/catch` block and roll back the DB transaction if Kafka throws.",
+      "Publish the Kafka event inside the DB transaction BEFORE calling `COMMIT` so both happen together.",
+      "Write the order row and an `outbox_events` row in the SAME local PostgreSQL ACID transaction, and stream the outbox table to Kafka via CDC or a polling relay.",
+      "Enable Kafka `acks=all` and `enable.idempotence=true` on the producer so the broker guarantees delivery after DB commit."
+    ],
+    "correctIndex": 2,
+    "explanation": "PostgreSQL and Kafka are separate distributed systems with no shared atomic commit protocol here. By persisting the domain state (`orders`) and the event payload (`outbox_events`) inside the same local ACID transaction, either both commit or both roll back. A separate Debezium CDC connector or polling relay reads committed outbox rows and publishes them at-least-once to Kafka, completely eliminating the dual-write gap.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Illusion of cross-system rollback",
+        "whyWrong": "Once `COMMIT` finishes in Postgres, `catch` cannot magically undo it cleanly—and if the pod is SIGKILLed or OOM-killed between commit and `send()`, the `catch` block never even executes. Conversely, rolling back after a transient network timeout when Kafka *did* receive the message creates the reverse ghost-event bug."
+      },
+      "1": {
+        "trap": "Holding DB transactions open across network I/O",
+        "whyWrong": "Publishing to Kafka *before* `COMMIT` creates two severe failures: (a) if Postgres later fails to commit (constraint violation, deadlock, node crash), consumers act on an order that never existed; (b) network latency to Kafka holds database row locks and connections open, tanking DB throughput."
+      },
+      "2": {
+        "keyInsight": "Local ACID atomicity across state + event record paired with asynchronous relay guarantees zero lost events without 2PC."
+      },
+      "3": {
+        "trap": "Confusing transport guarantees with application atomicity",
+        "whyWrong": "`acks=all` and producer idempotence only make Kafka's internal replication and retry within a live producer reliable—they cannot bridge the crash window between a separate PostgreSQL `COMMIT` and calling `send()`."
+      }
+    },
+    "wisdomTakeaway": "Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox."
+  },
+  {
+    "id": "INT-02",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Timeout Semantics & Idempotency",
+    "scenario": "A Checkout Service calls a third-party Payment Gateway's `POST /charges` endpoint with a 3-second read timeout. When the gateway gets slow, Checkout catches `SocketTimeoutException` and automatically retries twice. Finance reports double-charged customers.",
+    "question": "What is the root cause and the correct production fix?",
+    "options": [
+      "Increase the read timeout to 30 seconds and remove retries so the gateway always finishes in one attempt.",
+      "A read timeout means 'outcome unknown', not 'charge failed'. Attach a deterministic client-generated Idempotency-Key persisted with the checkout attempt, and ensure the gateway (or an internal ledger wrapper) deduplicates retries.",
+      "Switch from HTTP POST to HTTP PUT, because PUT requests are automatically safe from duplicate side effects on any server.",
+      "Check the customer's recent charges via `GET /charges?user_id=...` before retrying `POST /charges`."
+    ],
+    "correctIndex": 1,
+    "explanation": "On a read timeout, the TCP packet already reached the payment gateway and likely executed the charge; only the response packet was delayed or lost. Retrying without an idempotency key creates a second independent charge. Generating and persisting a deterministic `Idempotency-Key` tied to the order attempt lets safe retries return the original charge outcome without re-executing the debit.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Masking partial failure with huge timeouts",
+        "whyWrong": "A 30s timeout ties up caller worker threads/connections during gateway degradation (Little's Law saturation) AND still fails to solve true network drops after the server processed the charge."
+      },
+      "1": {
+        "keyInsight": "Network timeouts represent ambiguity, not failure; explicit idempotency keys make ambiguity safe to retry."
+      },
+      "2": {
+        "trap": "Relying on HTTP verb theory instead of server semantics",
+        "whyWrong": "HTTP specifications define PUT as idempotent conceptually, but an endpoint only becomes idempotent if the server implements deduplication or state replacement logic—a payment gateway won't change non-idempotent charge creation just because of the verb."
+      },
+      "3": {
+        "trap": "Time-of-Check to Time-of-Use (TOCTOU) race condition",
+        "whyWrong": "If the first charge is still in-flight or replicated asynchronously when `GET` runs, `GET` returns nothing, Checkout retries `POST`, and both charges succeed concurrently. Also fails if a legitimate repeat purchase happens seconds apart."
+      }
+    },
+    "wisdomTakeaway": "Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry."
+  },
+  {
+    "id": "INT-03",
+    "pillar": "integration",
+    "difficulty": "Staff / Principal",
+    "concept": "Retry Amplification & Jitter",
+    "scenario": "An API Gateway calls Service A, which calls Service B, which calls Service C. Each hop has an HTTP client configured with 3 automatic retries and deterministic 100ms exponential backoff (100ms, 200ms, 400ms). Service C experiences a brief 2-second GC stall and recovers, yet the whole platform stays in a brownout for 20 minutes.",
+    "question": "Why did the outage persist long after Service C recovered, and which combination of fixes stops this pattern?",
+    "options": [
+      "Service C's circuit breaker stayed Open too long; remove circuit breakers so traffic immediately warms C back up.",
+      "Multiplicative retry amplification (up to 4^3 = 64x requests) plus synchronized deterministic backoff created a thundering retry storm; retry at only ONE layer with Full Jitter, propagate remaining request deadlines, and enforce a retry budget (e.g., max 10% retry ratio).",
+      "Switch all internal calls from REST/JSON to gRPC/Protobuf so retries finish faster.",
+      "Increase the backoff base from 100ms to 5,000ms at every service layer so Service C gets longer rest periods."
+    ],
+    "correctIndex": 1,
+    "explanation": "Layered retries multiply exponentially: 4 attempts at Gateway x 4 at A x 4 at B = 64 attempts at C per user request! Deterministic backoff synchronizes thousands of callers into lockstep waves. Retrying at only one edge/client layer (with deadline propagation so expired user requests aren't retried), adding Full Jitter to desynchronize waves, and capping total retries via a retry budget prevents metastable collapse.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Misdiagnosing protection as the cause",
+        "whyWrong": "Removing circuit breakers floods a recovering dependency with full traffic immediately, keeping it pinned in GC/CPU exhaustion."
+      },
+      "1": {
+        "keyInsight": "Eliminating multiplicative retry layers + desynchronizing with jitter + retry budgets breaks the metastable feedback loop."
+      },
+      "2": {
+        "trap": "Micro-optimizing serialization during a macro traffic storm",
+        "whyWrong": "Protobuf reduces per-request CPU slightly, but a 64x traffic amplification storm still overwhelms connection pools, threads, and downstream databases regardless of wire format."
+      },
+      "3": {
+        "trap": "Holding resources hostage while sleeping",
+        "whyWrong": "Sleeping 5s+ across all layers multiplies concurrency `L = lambda * W`, exhausting threads/file descriptors across Gateway, A, and B while still keeping the 64x multiplicative retry fan-out."
+      }
+    },
+    "wisdomTakeaway": "Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines."
+  },
+  {
+    "id": "INT-04",
+    "pillar": "integration",
+    "difficulty": "Intermediate",
+    "concept": "Anti-Corruption Layer (ACL)",
+    "scenario": "Your modern E-commerce Checkout domain integrates with a 15-year-old legacy ERP over SOAP XML where statuses are cryptic codes (`STAT_04_HLD`), prices are strings in local quirks, and customer IDs change format per country. Three new teams need ERP data this quarter.",
+    "question": "Where should the translation logic live to protect your core domains from legacy schema churn and cryptic semantics?",
+    "options": [
+      "Expose the ERP SOAP models directly in your internal GraphQL schema so every frontend and microservice can map the fields it needs.",
+      "Build a dedicated Anti-Corruption Layer (ACL) boundary adapter that translates ERP XML/quirks into clean, canonical domain types and events before any core service consumes them.",
+      "Ask the ERP vendor to rewrite their SOAP API into clean JSON REST endpoints before starting your feature work.",
+      "Replicate the ERP's internal database tables directly into every microservice's database using nightly CSV dumps."
+    ],
+    "correctIndex": 1,
+    "explanation": "An Anti-Corruption Layer isolates legacy messy semantics, protocols, and brittle models behind a translation boundary. Core services speak clean ubiquitous domain concepts (`OrderStatus.ON_HOLD`, `Money`), while all SOAP parsing, code mapping, and ERP bug workarounds live in one replaceable adapter.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Spreading legacy corruption everywhere",
+        "whyWrong": "Exposing raw ERP quirks to every caller duplicates fragile `if (STAT_04_HLD)` logic across multiple teams and locks the entire company to the legacy model."
+      },
+      "1": {
+        "keyInsight": "Quarantining external volatility inside an ACL keeps core business logic clean and makes eventual ERP replacement trivial."
+      },
+      "2": {
+        "trap": "Blocking delivery on an external dependency you don't control",
+        "whyWrong": "Legacy vendor rewrites take quarters or years and carry high risk; you need architectural isolation that works against the ERP as it exists today."
+      },
+      "3": {
+        "trap": "Coupling directly to internal physical schemas",
+        "whyWrong": "CSV table dumps bypass business invariants, create stale batch windows, and couple all microservices to internal ERP table layouts."
+      }
+    },
+    "wisdomTakeaway": "Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer."
+  },
+  {
+    "id": "INT-05",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Schema Evolution & Expand-Contract",
+    "scenario": "A Billing Service publishes `InvoiceIssued` Avro/Protobuf events to Kafka consumed by 6 independent downstream services. You need to rename `amount_cents` (int) to `total_money` (an object with `amount` and `currency`) without breaking any consumer or requiring coordinated big-bang deployments.",
+    "question": "Which rollout sequence guarantees zero-downtime backward and forward compatibility?",
+    "options": [
+      "Update the producer schema to replace `amount_cents` with `total_money`, bump the Kafka topic name to `invoice-issued-v2`, and force all 6 teams to deploy at midnight.",
+      "Use Expand-and-Contract: (1) Add `total_money` as an optional field while still populating `amount_cents`, (2) Consumers migrate to read `total_money` with fallback to `amount_cents`, (3) Once telemetry confirms zero readers of `amount_cents`, deprecate/stop populating it.",
+      "Keep the field name `amount_cents` in the schema and change its type from integer to a nested JSON string so no schema change is registered.",
+      "Delete `amount_cents` from the Schema Registry and restart Kafka brokers with compatibility mode set to `NONE`."
+    ],
+    "correctIndex": 1,
+    "explanation": "Expand-and-Contract decouples producer and consumer release schedules. Adding an optional `total_money` field is backward/forward compatible; dual-populating during transition allows all 6 teams to migrate safely on their own schedules, and telemetry verifies zero legacy readers before contracting.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Coordinated midnight deployments",
+        "whyWrong": "Forcing 6 independent teams into lockstep deployment destroys team autonomy and guarantees painful rollback coordination if one consumer fails."
+      },
+      "1": {
+        "keyInsight": "Additive expansion + dual population + telemetry-verified contraction enables zero-coordination schema evolution."
+      },
+      "2": {
+        "trap": "Silent semantic/type breaking change",
+        "whyWrong": "Changing an integer field's payload into a stringified object breaks strongly typed deserializers and causes silent runtime parsing failures."
+      },
+      "3": {
+        "trap": "Disabling safety rails instead of evolving safely",
+        "whyWrong": "Setting compatibility to `NONE` and deleting fields immediately crashes existing consumers deserializing either old historical events or new events."
+      }
+    },
+    "wisdomTakeaway": "In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old."
+  },
+  {
+    "id": "INT-06",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Saga Orchestration vs Choreography",
+    "scenario": "A Fintech lending workflow executes 6 ordered steps across KYC, Credit Scoring, Fraud Check, Escrow Hold, Loan Disbursement, and Ledger Booking—with strict regulatory SLA timeouts and distinct compensation rules if step 4 or 5 fails.",
+    "question": "Why is an explicit Saga Orchestrator strongly preferred over pure event Choreography here?",
+    "options": [
+      "Choreography cannot be used with Kafka or RabbitMQ when more than 3 services exist.",
+      "Orchestration centralizes state transitions, SLA timeout timers, and compensating step order in one inspectable state machine, preventing scattered cyclic logic across 6 teams.",
+      "Orchestration uses database 2PC locks under the hood so compensations are never needed.",
+      "Choreography always duplicates network traffic 6x compared to orchestration."
+    ],
+    "correctIndex": 1,
+    "explanation": "With 6 sequential conditional steps, strict timeouts, and ordered compensations, pure choreography scatters the workflow across 6 codebases—making it nearly impossible to answer 'what state is Loan #991 stuck in?' or change step ordering cleanly. An Orchestrator (e.g., Temporal or a dedicated state-machine service) keeps flow control, timers, and compensation explicit while domain services still own their business logic.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "False technical limitation",
+        "whyWrong": "Message brokers support dozens of choreographed consumers easily; the problem with choreography at 6+ conditional steps is cognitive and operational complexity, not broker capability."
+      },
+      "1": {
+        "keyInsight": "Complex multi-step workflows with timeouts and ordered rollbacks need centralized state visibility, not scattered implicit reactions."
+      },
+      "2": {
+        "trap": "Confusing Sagas with 2PC",
+        "whyWrong": "Sagas explicitly avoid distributed 2PC locks and *always* rely on compensating actions when downstream steps fail after earlier local commits."
+      },
+      "3": {
+        "trap": "Invented performance metric",
+        "whyWrong": "Orchestration actually sends command + reply messages through the coordinator (similar or slightly more hops than direct choreography); you choose orchestration for clarity and control, not fewer packets."
+      }
+    },
+    "wisdomTakeaway": "Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants."
+  },
+  {
+    "id": "INT-07",
+    "pillar": "integration",
+    "difficulty": "Intermediate",
+    "concept": "Bulkhead Isolation",
+    "scenario": "Your API server exposes `/search`, `/checkout`, and `/export-pdf`. The `/export-pdf` endpoint calls a slow third-party rendering service. Whenever the PDF vendor slows down to 20s responses, `/checkout` and `/search` also start timing out with 503s even though their own databases are healthy.",
+    "question": "Which pattern prevents the slow PDF dependency from starving unrelated healthy endpoints?",
+    "options": [
+      "Bulkhead Pattern: isolate thread pools, connection pools, or semaphores per downstream dependency/workload so PDF rendering can exhaust only its own capped quota.",
+      "Increase the global web server worker thread pool from 200 to 2,000.",
+      "Add a global LRU response cache in front of `/export-pdf`.",
+      "Move `/export-pdf` from HTTP/1.1 to HTTP/2 multiplexing on the same shared worker pool."
+    ],
+    "correctIndex": 0,
+    "explanation": "Like watertight compartments on a ship, Bulkheads partition concurrency resources (threads, HTTP client pools, semaphore slots) per dependency or route. If the PDF vendor hangs and consumes all 15 PDF slots, new PDF requests fail fast while the 185 slots reserved for `/checkout` and `/search` remain completely unaffected.",
+    "distractorAnalysis": {
+      "0": {
+        "keyInsight": "Resource partitioning caps the blast radius of a single slow dependency so healthy paths keep their capacity."
+      },
+      "1": {
+        "trap": "Throwing unpartitioned capacity at a slow leak",
+        "whyWrong": "Without bulkheads, 2,000 threads will simply also get consumed by slow PDF calls during sustained degradation—plus 2,000 threads increase memory footprint and CPU context switching."
+      },
+      "2": {
+        "trap": "Assuming every slow endpoint is cacheable",
+        "whyWrong": "Custom user-specific PDF exports rarely have high cache hit rates, and cache misses still saturate the shared worker pool."
+      },
+      "3": {
+        "trap": "Confusing transport multiplexing with worker pool isolation",
+        "whyWrong": "HTTP/2 multiplexes TCP frames over one socket, which doesn't stop slow PDF work from holding every application worker thread on the shared pool."
+      }
+    },
+    "wisdomTakeaway": "Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads."
+  },
+  {
+    "id": "INT-08",
+    "pillar": "integration",
+    "difficulty": "Staff / Principal",
+    "concept": "Poison Pill & Dead Letter Queue Hygiene",
+    "scenario": "A Kafka consumer group processes `UserProfileUpdated` events across 12 partitions. One corrupted event triggers an unhandled `NullPointerException` during deserialization. Your consumer framework catches the exception, logs it, and refuses to commit the offset, retrying the same message forever.",
+    "question": "What happens to the system and what is the production-grade resolution?",
+    "options": [
+      "Only that single user is delayed; keep retrying indefinitely until a developer deploys a fix next week.",
+      "That entire partition stalls behind the poison-pill message (head-of-line blocking), backing up thousands of healthy users on the same partition. Route non-transient/deserialization failures after bounded retries to a Dead Letter Topic (DLT) with schema metadata, alert on DLT depth, and provide an audited replay tool.",
+      "Catch all exceptions and commit the offset anyway so throughput never drops.",
+      "Increase partitions from 12 to 120 so the poison pill affects fewer users."
+    ],
+    "correctIndex": 1,
+    "explanation": "Kafka commits offsets sequentially per partition, so one unprocessable poison pill halts 1/12th of all users indefinitely. Distinguishing transient infrastructure failures (retry with backoff / pause) from non-transient poison pills (malformed payload/code bug -> route to DLT with error headers + original offset + alert + replay workflow) preserves flow for healthy traffic without silent data loss.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Forgetting partition-level head-of-line blocking",
+        "whyWrong": "A Kafka partition holds events for ~8.3% of your entire keyspace, not just one user. Blocking offset commits freezes every user hashed to that partition."
+      },
+      "1": {
+        "keyInsight": "Separating non-transient poison pills into an alerted, replayable DLT unblocks healthy partition traffic without dropping data."
+      },
+      "2": {
+        "trap": "Silent data loss",
+        "whyWrong": "Swallowing exceptions and committing offsets permanently deletes business events with zero recovery path once log retention expires."
+      },
+      "3": {
+        "trap": "Reducing blast radius from 8% to 0.8% instead of fixing the stall",
+        "whyWrong": "0.8% of your customer base completely frozen for days is still a major incident, and you still lack a mechanism to recover the broken message."
+      }
+    },
+    "wisdomTakeaway": "Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay)."
+  },
+  {
+    "id": "INT-09",
+    "pillar": "integration",
+    "difficulty": "Intermediate",
+    "concept": "Thin Events vs Event-Carried State Transfer",
+    "scenario": "Every time a popular creator uploads a post, `ContentService` emits a thin event `{ postId: 123 }`. Immediately, 14 downstream microservices (Notifications, Search, Feed, Analytics, Moderation, Billing, etc.) all call `GET /posts/123` simultaneously.",
+    "question": "What integration flaw is occurring and how does Event-Carried State Transfer (ECST) resolve it?",
+    "options": [
+      "The broker is misconfigured; enable Kafka compression to shrink `{ postId: 123 }`.",
+      "Thin events force immediate synchronous callbacks from every consumer back to the producer (creating a self-inflicted read DDoS and restoring temporal coupling). Embedding the immutable snapshot of relevant post attributes in the event (ECST) lets consumers process asynchronously without calling back.",
+      "Put the post content in a Redis key and pass the Redis password in the event.",
+      "Replace Kafka with cron jobs polling `ContentService` every 5 seconds."
+    ],
+    "correctIndex": 1,
+    "explanation": "Thin notification events sound clean in theory, but when 14 services react concurrently, each event amplifies into 14 synchronous GET calls against `ContentService`—reintroducing temporal coupling and read spikes! Event-Carried State Transfer includes a well-versioned public state snapshot in the event so consumers remain autonomous.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Optimizing payload size when callback fan-out is the problem",
+        "whyWrong": "The event is already tiny (`{ postId: 123 }`); the bottleneck is the 14 synchronous HTTP callbacks triggered upon delivery."
+      },
+      "1": {
+        "keyInsight": "Carrying a clean public state snapshot in the event eliminates synchronous callback storms and truly decouples availability."
+      },
+      "2": {
+        "trap": "Shared cache backdoor coupling",
+        "whyWrong": "Sharing a private Redis cluster across 14 services couples everyone to internal cache serialization, TTL eviction races, and security boundaries."
+      },
+      "3": {
+        "trap": "Replacing event-driven push with wasteful polling",
+        "whyWrong": "14 services polling every 5 seconds wastes bandwidth, increases latency, and still hammers `ContentService`."
+      }
+    },
+    "wisdomTakeaway": "If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede."
+  },
+  {
+    "id": "INT-10",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Contract Testing vs End-to-End Environments",
+    "scenario": "Your company has 18 microservices. Before every deploy, all 18 services must pass an integrated end-to-end test suite in a shared `staging` environment. The suite takes 90 minutes, flakes 35% of the time due to dirty shared test data and someone else's broken deploy, and stalls releases.",
+    "question": "How do you restore fast, reliable integration verification across the 18 services?",
+    "options": [
+      "Replace all integration tests with unit tests using handwritten mocks for every HTTP client.",
+      "Adopt Consumer-Driven Contract Testing (e.g., Pact or OpenAPI/Protobuf schema verification in CI) alongside isolated ephemeral container tests per service, reserving a tiny smoke suite for staging.",
+      "Deploy directly to production without integration tests and rely only on Rollback.",
+      "Create 5 more shared staging environments so teams wait less in line."
+    ],
+    "correctIndex": 1,
+    "explanation": "Shared full-mesh staging environments scale quadratically in flakiness and wait time. Consumer-Driven Contract Tests verify in milliseconds during each service's CI build that producers satisfy every consumer's actual expectations (and consumers only depend on valid contract fields), drastically reducing reliance on brittle shared staging.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Handwritten mocks drift silently from reality",
+        "whyWrong": "Mocks only verify what the consumer *assumes* the producer returns—when the producer renames a field, unit tests still pass green while production crashes."
+      },
+      "1": {
+        "keyInsight": "Contract tests verify both sides independently in seconds without needing all 18 live services running simultaneously."
+      },
+      "2": {
+        "trap": "Reckless removal of contract verification",
+        "whyWrong": "Catching schema breaks in production hurts customers and still causes noisy rollbacks, especially for async queues where bad events pollute topics."
+      },
+      "3": {
+        "trap": "Scaling a broken architecture linearly",
+        "whyWrong": "5 staging environments multiply cloud cost and environment-drift maintenance while each individual 90-minute run still flakes 35% of the time."
+      }
+    },
+    "wisdomTakeaway": "Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck."
+  },
+  {
+    "id": "MOD-01",
+    "pillar": "modularity",
+    "difficulty": "Senior",
+    "concept": "Distributed Monolith Anti-Pattern",
+    "scenario": "A startup split its Rails app into 12 microservices. Today, shipping a simple 'Add Coupon Discount' feature requires opening PRs in 6 repositories, migrating a shared PostgreSQL database used by 4 services, and deploying all 6 services in a strict manual sequence.",
+    "question": "What architectural failure occurred, and what is the wisest corrective strategy?",
+    "options": [
+      "They haven't split far enough; split the 12 services into 30 smaller single-entity services.",
+      "They built a Distributed Monolith—physical separation without logical boundaries or data ownership. Consolidate tightly coupled services back into a Modular Monolith (or realign around true Bounded Contexts where each module owns its own data and public facade).",
+      "Install Istio Service Mesh and Kubernetes ArgoCD to automate the 6-service synchronized deploys.",
+      "Introduce GraphQL Federation on top of the 12 services so frontend only makes one call."
+    ],
+    "correctIndex": 1,
+    "explanation": "Lockstep deployments and shared database tables prove the 12 services are not independent bounded contexts—they just added network serialization and operational overhead on top of coupled logic. Merging coupled pieces into a Modular Monolith (or carving clean data-owning boundaries) eliminates distributed friction while preserving clean internal modules.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Doubling down on the wrong decomposition axis",
+        "whyWrong": "Splitting 12 coupled services into 30 nano-services makes one feature touch 15 repos instead of 6, multiplying network latency and deployment choreography."
+      },
+      "1": {
+        "keyInsight": "Modularity is determined by independent changeability and data ownership, not deployment count."
+      },
+      "2": {
+        "trap": "Using DevOps tooling to mask bad domain boundaries",
+        "whyWrong": "ArgoCD and service meshes automate deployment mechanics, but they cannot fix a shared database schema or cross-service domain coupling."
+      },
+      "3": {
+        "trap": "Beautifying the storefront while the kitchen is tangled",
+        "whyWrong": "GraphQL Federation only simplifies client querying; backend feature changes still require 6 coordinated PRs and shared DB migrations."
+      }
+    },
+    "wisdomTakeaway": "If a single business change consistently requires synchronized releases across multiple services, you don't have microservices—you have a distributed monolith."
+  },
+  {
+    "id": "MOD-02",
+    "pillar": "modularity",
+    "difficulty": "Intermediate",
+    "concept": "Hexagonal Architecture & Dependency Inversion",
+    "scenario": "Your core Tax & Pricing calculation engine imports `sqlalchemy.orm.Session`, `stripe.Charge`, and `flask.request` directly inside pricing methods. Writing unit tests takes 40 seconds per run using Docker Postgres, and swapping Stripe for Adyen looks terrifying.",
+    "question": "How does Hexagonal (Ports & Adapters) Architecture solve this cleanly?",
+    "options": [
+      "Keep all SQL and Stripe calls inside the pricing engine, but mock `flask.request` and `stripe.Charge` globally in `conftest.py`.",
+      "Move pure pricing rules into a framework-free Domain Core that defines narrow Port interfaces (`PaymentPort`, `TaxRateRepository`). Implement SQLAlchemy, Stripe/Adyen, and Flask HTTP handlers as outer Adapters that depend inward on the core.",
+      "Rewrite the pricing engine as stored procedures inside PostgreSQL so Python tests aren't needed.",
+      "Split every pricing class into its own AWS Lambda function."
+    ],
+    "correctIndex": 1,
+    "explanation": "In Hexagonal Architecture, business policy never depends on I/O frameworks or vendor SDKs. By defining Ports owned by the domain core and plugging in outer Adapters, core pricing logic tests in milliseconds with in-memory fakes, and swapping Stripe for Adyen only requires writing a new Adapter.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Brittle monkeypatching to compensate for inverted dependencies",
+        "whyWrong": "Mocking third-party SDK internals across tests ties your test suite to Stripe's library structure and leaves domain rules entangled with HTTP/ORM lifecycles."
+      },
+      "1": {
+        "keyInsight": "Dependencies must point INWARD toward stable business rules, never outward from business rules to volatile infrastructure."
+      },
+      "2": {
+        "trap": "Locking business logic into the database engine",
+        "whyWrong": "Stored procedures make versioning, local testing, horizontal compute scaling, and vendor integrations dramatically harder."
+      },
+      "3": {
+        "trap": "Confusing serverless packaging with clean dependency structure",
+        "whyWrong": "A Lambda function whose handler still entangles Stripe SDK, HTTP parsing, and pricing math has the exact same coupling problem—now with cold starts."
+      }
+    },
+    "wisdomTakeaway": "Your business logic should have zero idea whether it was invoked by HTTP, Kafka, or a CLI test—and zero idea whether data lives in Postgres or memory."
+  },
+  {
+    "id": "MOD-03",
+    "pillar": "modularity",
+    "difficulty": "Senior",
+    "concept": "DRY Misuse vs Bounded Context Autonomy",
+    "scenario": "Both the `OrderFulfillment` module and the `CustomerBilling` module have a `Customer` class with `name`, `address`, and `status`. A well-meaning engineer proposes extracting `Customer` into a single `company-common-domain` npm/PyPI package shared by both modules.",
+    "question": "Why should a Principal Engineer push back on merging these two `Customer` models into one shared domain package?",
+    "options": [
+      "Shared npm/PyPI packages are always slower at runtime than duplicated classes.",
+      "Although they share the word 'Customer', Fulfillment cares about shipping addresses and delivery instructions while Billing cares about tax IDs, credit limits, and invoicing cycles. Merging them creates semantic coupling across independent change axes.",
+      "JavaScript and Python cannot import shared classes across directories.",
+      "Because DRY only applies to UI components, never backend code."
+    ],
+    "correctIndex": 1,
+    "explanation": "This is the classic Bounded Context trap: two domains share a vocabulary word ('Customer') but represent distinct concepts evolving on different schedules. Sharing a unified domain model forces Billing changes to trigger Fulfillment redeployments and breeds giant classes full of nullable fields (`shippingGateCode` mixed with `vatNumber`).",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Inventing runtime performance reasons for an architectural coupling problem",
+        "whyWrong": "Importing a package adds negligible runtime cost; the real damage is release coupling, bloated god-entities, and accidental cross-team breakage."
+      },
+      "1": {
+        "keyInsight": "DRY applies to duplicating single business knowledge, NOT to accidentally uniting concepts from separate Bounded Contexts that happen to share a noun."
+      },
+      "2": {
+        "trap": "False technical claim",
+        "whyWrong": "Sharing packages is mechanically easy—that's precisely why developers overdo it before feeling the organizational pain."
+      },
+      "3": {
+        "trap": "Overgeneralized dismissal of DRY",
+        "whyWrong": "DRY is valuable *within* a single cohesive concept (e.g., one authoritative tax calculation formula), just harmful when forcing artificial unification *across* bounded contexts."
+      }
+    },
+    "wisdomTakeaway": "A little duplication across bounded contexts is far cheaper than the wrong shared abstraction."
+  },
+  {
+    "id": "MOD-04",
+    "pillar": "modularity",
+    "difficulty": "Staff / Principal",
+    "concept": "Connascence & Coupling Strength",
+    "scenario": "Module A exports a function `process_order(data: tuple)` where callers must pass `(user_id, coupon_code, total_cents, is_vip)` in that exact positional order, and `process_order` relies on `validate_inventory()` having mutated a global cache right before it runs.",
+    "question": "Which statement accurately diagnoses the coupling risks using Connascence theory?",
+    "options": [
+      "This is only Connascence of Name, which is the weakest and safest form of coupling.",
+      "The tuple exhibits Connascence of Position (fragile argument ordering), while the hidden cache mutation exhibits Connascence of Execution Order (temporal coupling). Replacing the tuple with an explicit typed DTO/command and passing validated state explicitly weakens coupling to Connascence of Name/Type.",
+      "This is Connascence of Algorithm and can only be fixed by splitting Module A into a microservice.",
+      "Positional tuples are safer than named fields because they avoid naming conflicts."
+    ],
+    "correctIndex": 1,
+    "explanation": "Connascence measures how painful a change is. Positional tuples break silently if two integers or booleans swap positions (Connascence of Position). Requiring a prior secret global mutation is Connascence of Execution Order—any refactor or async reordering causes subtle bugs. Explicit typed objects and pure data-flow weaken coupling to Name & Type, caught at compile/lint time.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Misidentifying strong positional & temporal coupling as harmless name coupling",
+        "whyWrong": "Connascence of Name (agreeing on a method/field identifier) is trivial to refactor with IDE tooling; positional tuples and hidden order-dependent mutations break silently at runtime."
+      },
+      "1": {
+        "keyInsight": "Good modular design systematically converts dynamic/positional/order coupling into explicit static Type and Name contracts."
+      },
+      "2": {
+        "trap": "Overkill physical split for an interface-design flaw",
+        "whyWrong": "Moving bad function contracts over HTTP just makes positional and order coupling even harder to debug."
+      },
+      "3": {
+        "trap": "Confusing brevity with safety",
+        "whyWrong": "Short positional tuples invite silent transposition bugs (swapping `amount` and `user_id` if both are ints) and hurt readability across module borders."
+      }
+    },
+    "wisdomTakeaway": "Push module interfaces toward weak, static coupling (explicit types and names) and eliminate hidden execution-order assumptions."
+  },
+  {
+    "id": "MOD-05",
+    "pillar": "modularity",
+    "difficulty": "Senior",
+    "concept": "Strangler Fig Migration",
+    "scenario": "A 10-year-old Java monolith handles authentication, catalog, cart, and checkout, generating $50M/year. Leadership demands modernizing Checkout first because promo-code velocity is blocked, without pausing business features or risking downtime.",
+    "question": "Which migration strategy safely replaces the legacy checkout without a catastrophic rewrite?",
+    "options": [
+      "Freeze all feature work for 9 months, build the entire new system in parallel from scratch, and switch DNS over one weekend.",
+      "Apply the Strangler Fig pattern: place a routing facade/API gateway in front of the monolith, build the new Checkout module/service incrementally, mirror shadow traffic or dual-check parity on one route at a time, cut traffic over via feature flags, and decommission legacy code slice by slice.",
+      "Copy-paste the entire Java monolith repo into a second repo and delete non-checkout code gradually.",
+      "Rewrite the database schema first while both old and new checkout code write randomly to overlapping tables."
+    ],
+    "correctIndex": 1,
+    "explanation": "Big-bang rewrites fail because the legacy system keeps evolving while the rewrite tries to rediscover 10 years of edge cases. Strangler Fig intercepts routes at an edge facade, migrates narrow vertical slices incrementally with shadow/parity verification and instant rollback, delivering business value early with bounded blast radius.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "The Big-Bang Rewrite Trap",
+        "whyWrong": "9-month feature freezes rarely hold in real businesses, scope balloons, undocumented edge cases emerge at cutover, and rollback after schema divergence is a nightmare."
+      },
+      "1": {
+        "keyInsight": "Incremental slicing behind a routing seam with parity validation turns a binary all-or-nothing gamble into reversible weekly wins."
+      },
+      "2": {
+        "trap": "Cloning a ball of mud",
+        "whyWrong": "Cloning the entire codebase carries all legacy dependencies and database entanglement forward without establishing a clean boundary or traffic cutover seam."
+      },
+      "3": {
+        "trap": "Uncontrolled dual-writes on live tables",
+        "whyWrong": "Two codebases mutating overlapping legacy tables with different invariants corrupts financial state and makes rollback impossible."
+      }
+    },
+    "wisdomTakeaway": "Never bet the business on a big-bang cutover—strangle legacy systems one vertical slice at a time with instant rollback."
+  },
+  {
+    "id": "MOD-06",
+    "pillar": "modularity",
+    "difficulty": "Intermediate",
+    "concept": "Vertical Slice Architecture vs Technical Layers",
+    "scenario": "In a large backend repository organized strictly into `controllers/`, `services/`, `mappers/`, `validators/`, and `repositories/`, adding a single 'Pause Subscription' endpoint forces developers to edit 7 folders, resolve merge conflicts daily, and wade through 2,000-line `SubscriptionService` files.",
+    "question": "What structural reorganization improves modularity inside the codebase?",
+    "options": [
+      "Split `controllers/`, `services/`, and `repositories/` into three separate Git repositories.",
+      "Reorganize by Vertical Slices / Feature Modules (e.g., `subscriptions/pause/`, `subscriptions/upgrade/`) where each slice encapsulates its own handler, validation, domain logic, and persistence query.",
+      "Merge all methods into one `MainController` to reduce file switching.",
+      "Move all validation logic into frontend React components so backend folders shrink."
+    ],
+    "correctIndex": 1,
+    "explanation": "Horizontal technical layers maximize intra-layer grouping of unrelated things while scattering every real business change across 5–7 directories. Vertical Slices align code structure with the axis of change (business use cases), keeping cohesion high, files small, and merge conflicts low.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Siloing technical layers into separate repos",
+        "whyWrong": "Splitting horizontal layers across repos is even worse—now adding one field requires coordinated PRs across three repositories."
+      },
+      "1": {
+        "keyInsight": "Things that change together for the same business capability should live together in one cohesive vertical slice."
+      },
+      "2": {
+        "trap": "Trading scattered files for a massive God Object",
+        "whyWrong": "Dumping unrelated workflows into one giant controller destroys cohesion and worsens merge conflicts."
+      },
+      "3": {
+        "trap": "Violating server-side trust boundaries",
+        "whyWrong": "Frontend validation is UX only; skipping backend validation opens security and data-corruption vulnerabilities."
+      }
+    },
+    "wisdomTakeaway": "Organize folders by business capability and use case, not by technical layer—optimize for how features actually change."
+  },
+  {
+    "id": "MOD-07",
+    "pillar": "modularity",
+    "difficulty": "Staff / Principal",
+    "concept": "Architectural Fitness Functions",
+    "scenario": "Six months ago your team agreed on strict module boundaries inside a Modular Monolith (`billing` cannot import `inventory` internals or query `inventory_*` SQL tables directly). During recent crunch weeks, engineers added quick direct imports and cross-module SQL joins.",
+    "question": "Why did the modularity erode, and how do high-performing teams keep boundaries intact over years?",
+    "options": [
+      "Hold monthly architecture review meetings where senior engineers manually read every file in the repo.",
+      "Encode structural rules as automated Architectural Fitness Functions in CI (e.g., ArchUnit/Deptrac/ESLint import boundary checks, SQL table-ownership linters, and cycle detection) that fail the build on violations.",
+      "Write a longer Confluence page with bolder red warning boxes.",
+      "Require every engineer to obtain VP approval before adding any `import` statement."
+    ],
+    "correctIndex": 1,
+    "explanation": "Architecture rules documented only in wikis always decay under deadline pressure (architectural entropy). Automated Fitness Functions turn boundary rules into fast, objective CI checks—catching illegal cross-module imports, cyclic dependencies, or table leaks before code ever merges.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Unscalable manual gatekeeping",
+        "whyWrong": "Manual audits happen too late, create resentment, and miss subtle transitive imports."
+      },
+      "1": {
+        "keyInsight": "If an architectural boundary isn't enforced automatically in CI, it is only a suggestion."
+      },
+      "2": {
+        "trap": "Documentation as enforcement",
+        "whyWrong": "New hires and rushed engineers rarely re-read static Confluence diagrams during an incident hotfix."
+      },
+      "3": {
+        "trap": "Bureaucratic friction instead of automated feedback",
+        "whyWrong": "Human approval queues kill velocity without giving instant local IDE/CI feedback."
+      }
+    },
+    "wisdomTakeaway": "Good intentions don't preserve modular boundaries—automated CI fitness functions do."
+  },
+  {
+    "id": "MOD-08",
+    "pillar": "modularity",
+    "difficulty": "Senior",
+    "concept": "Conway's Law & Inverse Conway Maneuver",
+    "scenario": "Your company has 4 functional teams: UI Team, Backend API Team, Database Team, and QA Team. Yet leadership wants an architecture of 6 autonomous domain microservices so features ship independently. Instead, every tiny feature requires a 4-team Jira handoff chain taking 3 weeks.",
+    "question": "What explains this friction, and what organizational/architectural fix addresses the root cause?",
+    "options": [
+      "Conway's Law: horizontal team silos naturally produce horizontally coupled layers, not autonomous domain modules. Apply the Inverse Conway Maneuver by reorganizing into cross-functional stream-aligned teams owning vertical domain contexts end-to-end.",
+      "Add a Scrum Master to each of the 4 horizontal teams to speed up Jira handoffs.",
+      "Force the 4 teams to share a single Slack channel so communication is faster.",
+      "Switch from microservices to serverless functions while keeping the exact same 4 siloed teams."
+    ],
+    "correctIndex": 0,
+    "explanation": "Conway's Law guarantees your software architecture mirrors your org chart's communication paths. Siloed UI/API/DB/QA teams cannot cleanly own autonomous domain verticals because every change crosses 4 organizational boundaries. Stream-aligned cross-functional teams align human ownership with modular domain boundaries.",
+    "distractorAnalysis": {
+      "0": {
+        "keyInsight": "You cannot sustain modular domain architecture on top of horizontal functional team silos; align teams with bounded contexts."
+      },
+      "1": {
+        "trap": "Optimizing handoff paperwork instead of removing handoffs",
+        "whyWrong": "Faster Jira grooming does not eliminate wait queues, competing team backlogs, and fragmented domain knowledge."
+      },
+      "2": {
+        "trap": "Confusing chat volume with structural alignment",
+        "whyWrong": "One noisy Slack channel still preserves 4 separate backlogs and priority conflicts."
+      },
+      "3": {
+        "trap": "Changing compute runtime without changing ownership",
+        "whyWrong": "Serverless functions built by siloed UI/API/DB teams simply reproduce the same cross-team handoff bottlenecks."
+      }
+    },
+    "wisdomTakeaway": "Architecture and org design are two halves of one system—if your teams are sliced horizontally, your system will fight vertical modularity."
+  },
+  {
+    "id": "MOD-09",
+    "pillar": "modularity",
+    "difficulty": "Intermediate",
+    "concept": "Premature Abstraction & Rule of Three",
+    "scenario": "On Week 1 of a greenfield project, an engineer creates `AbstractGenericRepositoryFactory<T, ID>`, `IBaseCrudService<T>`, and 5 layers of pass-through interfaces for a single `User` entity with 2 endpoints. Changing one column now touches 9 files.",
+    "question": "What modularity mistake is being made and how should the engineer refactor?",
+    "options": [
+      "Keep the interfaces because having 100% interface coverage is mandatory for enterprise quality.",
+      "Speculative generality / premature abstraction creates indirection without real variation. Collapse pass-through layers into concrete, readable module code and extract abstractions only when genuinely distinct implementations or domain boundaries emerge (Rule of Three).",
+      "Add a code generator to auto-create the 9 files for every new entity.",
+      "Move the abstract classes into a separate Git repository so the main repo looks cleaner."
+    ],
+    "correctIndex": 1,
+    "explanation": "True modularity reduces cognitive load and change cost; cargo-cult interfaces that mirror a single implementation 1:1 double the files touched per change with zero decoupling benefit. Keep interfaces for real architectural seams (external I/O ports, module public facades, genuine strategy variants) and drop speculative wrappers.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Confusing interface count with architectural quality",
+        "whyWrong": "1:1 mirror interfaces (`UserService` + `IUserService` with one implementation and direct ORM leakage) add boilerplate without isolating volatility."
+      },
+      "1": {
+        "keyInsight": "Every abstraction carries maintenance weight; earn abstractions through real variation or boundary isolation, not speculation."
+      },
+      "2": {
+        "trap": "Automating unnecessary complexity",
+        "whyWrong": "Generating 9 boilerplate files per entity still leaves humans reading and debugging 9 files for trivial changes."
+      },
+      "3": {
+        "trap": "Hiding bloat in another repository",
+        "whyWrong": "Moving speculative base classes to another repo makes debugging and evolving them even more painful."
+      }
+    },
+    "wisdomTakeaway": "Duplication is cheap; the wrong abstraction is expensive. Abstract at real boundaries and real points of variation."
+  },
+  {
+    "id": "MOD-10",
+    "pillar": "modularity",
+    "difficulty": "Staff / Principal",
+    "concept": "Plugin / SPI Architecture & Sandboxing",
+    "scenario": "Your SaaS workflow platform lets enterprise customers run custom validation and enrichment rules. Initially you added `if (tenant == 'acme')` branches inside core code, causing regressions for all customers whenever one tenant requested a tweak.",
+    "question": "How should you modularize tenant-specific extensions without destabilizing the core platform?",
+    "options": [
+      "Give each enterprise customer their own forked Git branch of the entire SaaS repository.",
+      "Define a stable, versioned Extension/SPI (Service Provider Interface) contract with strict input/output DTOs, resource limits/timeouts, and isolate tenant plugins out-of-process or in sandboxed runtimes (e.g., WASM/webhooks/isolated workers) decoupled from core release cycles.",
+      "Let customers upload arbitrary SQL queries to run directly on your primary database.",
+      "Keep `if (tenant == ...)` branches inside core code, just require 2 reviewers per PR."
+    ],
+    "correctIndex": 1,
+    "explanation": "A Plugin/SPI architecture follows the Open-Closed Principle at system scale: the core platform stays closed to per-tenant hacks while open to extensions through a narrow, versioned contract. Sandboxing (WASM, isolated worker containers, or signed webhooks with strict timeouts) ensures a buggy tenant plugin cannot crash or hog resources for other tenants.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Fork-and-forget maintenance suicide",
+        "whyWrong": "Maintaining N separate forks of your core platform makes security patches and product upgrades quadratically expensive."
+      },
+      "1": {
+        "keyInsight": "Versioned SPI contracts + execution isolation turn bespoke tenant chaos into safe, composable extensibility."
+      },
+      "2": {
+        "trap": "Catastrophic security and performance hole",
+        "whyWrong": "Unbounded tenant SQL exposes cross-tenant data risks and lets one bad query lock or OOM the shared primary DB."
+      },
+      "3": {
+        "trap": "Process review cannot fix structural coupling",
+        "whyWrong": "Core releases stay blocked by tenant rules, and every new tenant grows conditional spaghetti inside shared business paths."
+      }
+    },
+    "wisdomTakeaway": "When core logic accumulates `if (customer == X)` branches, extract a stable Extension SPI and isolate custom behavior outside the core blast radius."
+  },
+  {
+    "id": "OPT-01",
+    "pillar": "optimization",
+    "difficulty": "Senior",
+    "concept": "Little's Law & Saturation Collapse",
+    "scenario": "Your API normally serves 400 req/s with 50ms average latency. A downstream fraud API degrades from 20ms to 2,000ms (2s). Your app runs 10 pods with 50 worker threads each (500 total threads). Within seconds, all 500 threads hang and even non-fraud health checks time out.",
+    "question": "Using Little's Law (L = lambda * W), what mathematically caused total pod thread exhaustion?",
+    "options": [
+      "The garbage collector stopped all threads because JSON payloads grew.",
+      "With arrival rate lambda = 400 req/s and residence time jumping to W = 2.0s, required concurrency became L = 400 * 2.0 = 800 concurrent threads—exceeding your 500-thread capacity and queuing every incoming request behind stalled downstream calls.",
+      "400 req/s exceeded the 1Gbps Linux loopback interface limit.",
+      "The CPU hit 100% computing TLS checksums."
+    ],
+    "correctIndex": 1,
+    "explanation": "Little's Law (`L = lambda * W`) governs concurrency under steady arrivals. Before degradation, `L = 400 * 0.05 = 20` active threads (plenty of headroom in 500). When downstream latency jumped 40x to 2s, required concurrency jumped to `400 * 2.0 = 800 > 500`, saturating all worker threads, failing health probes, and triggering cascading restarts.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Blaming GC without evidence when concurrency math explains everything",
+        "whyWrong": "Threads are blocked waiting on downstream socket reads, not burning CPU or allocating garbage."
+      },
+      "1": {
+        "keyInsight": "Latency spikes linearly multiply concurrency (`L = lambda * W`), exhausting fixed thread/connection pools almost instantly."
+      },
+      "2": {
+        "trap": "Imaginary network bandwidth ceiling",
+        "whyWrong": "400 requests/sec of typical API JSON is a few megabits/sec, orders of magnitude below 1Gbps."
+      },
+      "3": {
+        "trap": "Confusing I/O wait saturation with CPU saturation",
+        "whyWrong": "Worker threads waiting on slow 2s socket I/O use near-zero CPU while completely blocking request intake."
+      }
+    },
+    "wisdomTakeaway": "Slow dependencies are deadlier than fast crashes: rising W multiplies concurrency L until every thread pool upstream suffocates."
+  },
+  {
+    "id": "OPT-02",
+    "pillar": "optimization",
+    "difficulty": "Staff / Principal",
+    "concept": "Tail Latency Amplification & Hedged Requests",
+    "scenario": "A Search Aggregator fans out in parallel to 25 storage shards to build a results page. Each individual shard has an impressive p99 latency of 40ms (99% complete <= 40ms, 1% take 400ms due to occasional compaction/GC). Yet users complain the aggregator exceeds 400ms nearly 1 in 4 searches.",
+    "question": "Why does p99 fail so dramatically at the aggregator, and what optimization fixes it for idempotent shard reads?",
+    "options": [
+      "The aggregator is running single-threaded; add async threads.",
+      "Tail latency amplification: the probability all 25 shards are fast is `0.99^25 = 77.8%`, meaning `22.2%` of requests wait on at least one 400ms straggler! Issue hedged requests (send a backup read to a replica if a shard hasn't responded by its p95, ~15ms, with a strict hedge budget).",
+      "Replace parallel fan-out with sequential calls to the 25 shards so network congestion drops.",
+      "Lower the aggregator's shard timeout to 10ms and return empty results from timed-out shards."
+    ],
+    "correctIndex": 1,
+    "explanation": "In parallel fan-out, user latency equals the *maximum* of N shard latencies. Even at 99% per-shard reliability, across 25 shards `1 - 0.99^25 = 22.2%` hit the tail! Hedged requests (sending a speculative duplicate read to another replica only after the p95 delay threshold passes, plus a global hedge budget to protect during outages) slash tail latency while adding <=5% extra load.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Misdiagnosing parallel straggler math as client concurrency",
+        "whyWrong": "Even with infinitely fast parallel async I/O, waiting for 25 responses means waiting for the slowest 1 of 25."
+      },
+      "1": {
+        "keyInsight": "Parallel fan-out amplifies tail probabilities exponentially (`1 - p^N`); delayed hedged reads cut stragglers without flooding replicas."
+      },
+      "2": {
+        "trap": "Turning 40ms parallel into 25x latency sequential",
+        "whyWrong": "Sequential calls sum all 25 shard latencies (even 25 * 10ms = 250ms baseline, plus any straggler!)."
+      },
+      "3": {
+        "trap": "Sacrificing result correctness via ultra-aggressive timeouts",
+        "whyWrong": "A 10ms timeout drops valid shards routinely, degrading search relevance and user trust."
+      }
+    },
+    "wisdomTakeaway": "At scale, the average doesn't matter—when fanning out across N components, everyone experiences the tail."
+  },
+  {
+    "id": "OPT-03",
+    "pillar": "optimization",
+    "difficulty": "Senior",
+    "concept": "Database Connection Pool Sizing",
+    "scenario": "Your Kubernetes cluster runs 80 Python API pods. An engineer notices occasional `QueuePool limit reached` errors during traffic bursts and increases `pool_size` from 10 to 100 connections per pod against a 16-vCPU PostgreSQL primary. Suddenly, DB CPU spikes to 100% and query throughput drops by 60%.",
+    "question": "Why did raising the pool size to 8,000 potential connections wreck database throughput, and what is the optimal architecture?",
+    "options": [
+      "PostgreSQL drops packets when >1,000 ports open; switch to MySQL.",
+      "80 pods x 100 connections flooded Postgres with thousands of active backend processes fighting over 16 CPU cores, causing massive context-switching, spinlock contention, and cache thrashing. Keep active Postgres connections small (near `cores * 2 + spindles`, ~32-64) via a transaction pooler like PgBouncer.",
+      "Set `pool_size` to 1 per pod and disable TCP keepalive.",
+      "Increase PostgreSQL `max_connections` to 10,000 and double pod count to 160."
+    ],
+    "correctIndex": 1,
+    "explanation": "Each Postgres connection spawns an OS backend process. With 16 vCPUs, only 16 queries truly execute simultaneously; having hundreds or thousands of concurrent active connections causes OS scheduler thrashing and internal buffer/lock contention. Placing PgBouncer (transaction-mode pooling) in front keeps thousands of app pods multiplexed onto ~32–64 active DB backends—maximizing throughput.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Blaming the database vendor for queueing physics",
+        "whyWrong": "Any database on 16 cores suffers severe lock/CPU contention with thousands of concurrent active threads."
+      },
+      "1": {
+        "keyInsight": "Throughput peaks at a small active connection count (~2x-4x CPU cores); multiplex excess app pods through a pooler like PgBouncer."
+      },
+      "2": {
+        "trap": "Artificial starvation + handshake overhead",
+        "whyWrong": "1 connection per pod with disabled keepalive forces frequent TCP/TLS re-handshakes and stalls concurrent async coroutines inside a pod."
+      },
+      "3": {
+        "trap": "Removing the safety cap and adding more attackers",
+        "whyWrong": "Raising `max_connections` to 10,000 and doubling pods makes lock contention and RAM exhaustion (each Postgres backend consumes several MB) catastrophically worse."
+      }
+    },
+    "wisdomTakeaway": "More database connections almost never equal more database throughput—a 16-core DB runs fastest with dozens of active connections, not thousands."
+  },
+  {
+    "id": "OPT-04",
+    "pillar": "optimization",
+    "difficulty": "Senior",
+    "concept": "Cache Stampede (Thundering Herd) Prevention",
+    "scenario": "Your homepage product catalog JSON lives in Redis under one hot key (`homepage:featured`, 5-minute TTL) serving 15,000 RPS. Every 5 minutes sharp, Redis evicts the key and for 800ms all 15,000 RPS miss the cache and execute the heavy SQL aggregation concurrently, spiking Postgres CPU to 100%.",
+    "question": "Which solution cleanly prevents this periodic 5-minute database meltdown?",
+    "options": [
+      "Increase Redis memory maxmemory by 4x.",
+      "Combine Request Coalescing (Singleflight: only 1 worker rebuilds the key while concurrent callers await that single result or serve stale) with Probabilistic Early Expiration (XFetch) / background refresh + jittered TTLs.",
+      "Set the Redis TTL to `infinite` (never expire) and never invalidate.",
+      "Add 5 more Redis read replicas."
+    ],
+    "correctIndex": 1,
+    "explanation": "The stampede happens because thousands of requests observe a cache miss simultaneously during the 800ms rebuild window. Singleflight (or a distributed lock + serve-stale-while-revalidate) ensures only ONE query hits Postgres per miss, while Probabilistic Early Expiration refreshes hot keys proactively just before TTL expiry without synchronizing misses.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Throwing RAM at a TTL-expiration problem",
+        "whyWrong": "The key wasn't evicted due to OOM; it expired deterministically at 5 minutes. Extra Redis RAM doesn't change TTL expiry."
+      },
+      "1": {
+        "keyInsight": "Coalesce concurrent misses (Singleflight) and refresh hot keys asynchronously before expiration so only 1 DB query ever runs."
+      },
+      "2": {
+        "trap": "Trading stampedes for permanently stale pricing/inventory",
+        "whyWrong": "Never expiring or invalidating product data shows wrong prices and out-of-stock items forever—plus a Redis restart still causes a cold-start stampede."
+      },
+      "3": {
+        "trap": "Scaling the cache layer when the problem is a cache miss",
+        "whyWrong": "All 5 Redis replicas expire the same key at the exact same second and still forward 15,000 misses to Postgres."
+      }
+    },
+    "wisdomTakeaway": "Never let 10,000 concurrent cache misses each independently ask the database the exact same question—coalesce with Singleflight or refresh before expiry."
+  },
+  {
+    "id": "OPT-05",
+    "pillar": "optimization",
+    "difficulty": "Intermediate",
+    "concept": "Keyset Pagination vs Deep Offset",
+    "scenario": "Your mobile feed endpoint runs `SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?`. Page 1 takes 3ms, but users scrolling to Page 500 (`OFFSET 10000`) or bots scraping `OFFSET 500000` cause 2-second DB queries.",
+    "question": "Why does `OFFSET` degrade linearly with depth, and what fixes it?",
+    "options": [
+      "SQL databases always sort in memory on `OFFSET`; add more RAM.",
+      "`OFFSET 500000` forces the database engine to scan and discard 500,000 index/heap rows on every page request. Switch to Keyset (Cursor) Pagination (`WHERE (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT 20`) backed by a composite index `(user_id, created_at DESC, id DESC)` for constant O(log N) seek time.",
+      "Cache every page from 1 to 25,000 in Redis on every new post.",
+      "Replace `LIMIT 20` with `LIMIT 1000` so clients fetch fewer pages."
+    ],
+    "correctIndex": 1,
+    "explanation": "SQL `OFFSET K` cannot jump directly to row K in a filtered B-Tree; it must walk and count K rows before returning the next 20. Keyset/Cursor pagination seeks directly to the exact tuple `(last_created_at, last_id)` via B-Tree binary search in O(log N) regardless of depth, and also avoids duplicate/skipped rows when new posts arrive.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "RAM doesn't eliminate linear row scanning/counting",
+        "whyWrong": "Even fully cached in RAM (`shared_buffers`), walking and discarding 500,000 rows per query burns CPU and degrades linearly with depth."
+      },
+      "1": {
+        "keyInsight": "Seeking directly from the last seen `(created_at, id)` cursor turns O(offset) linear scans into O(log N) B-Tree lookups."
+      },
+      "2": {
+        "trap": "Exploding write amplification on every insert",
+        "whyWrong": "Recomputing or invalidating 25,000 cached pages every time a user inserts a post turns every write into massive cache churn."
+      },
+      "3": {
+        "trap": "Increasing payload size and initial load latency",
+        "whyWrong": "Fetching 1,000 rows on initial page load wastes bandwidth, memory, and DB I/O when users typically read only the first 20 items."
+      }
+    },
+    "wisdomTakeaway": "For feeds, logs, and APIs over large datasets, `OFFSET` is a ticking latency bomb—default to cursor/keyset pagination."
+  },
+  {
+    "id": "OPT-06",
+    "pillar": "optimization",
+    "difficulty": "Intermediate",
+    "concept": "Composite Index Leftmost Prefix & Covering Indexes",
+    "scenario": "A `transactions` table (100M rows) has an index `CREATE INDEX idx_tx ON transactions (merchant_id, status, created_at)`. Yet the query `SELECT id, amount FROM transactions WHERE status = 'FAILED' AND created_at > now() - interval '1 hour'` performs a 12-second sequential table scan.",
+    "question": "Why did PostgreSQL ignore `idx_tx`, and how do you optimize this query?",
+    "options": [
+      "PostgreSQL only uses indexes when `SELECT *` is used.",
+      "Because `merchant_id` is the leading column of the composite B-Tree index and isn't in the `WHERE` clause, the leftmost prefix rule prevents efficient range seeking on `(status, created_at)`. Add a partial or composite index on `(status, created_at) INCLUDE (id, amount)` (or `WHERE status = 'FAILED'`) so it resolves as an Index-Only Scan.",
+      "Run `VACUUM FULL` every 5 minutes so Postgres remembers the old index.",
+      "Convert `status` from `VARCHAR` to `TEXT`."
+    ],
+    "correctIndex": 1,
+    "explanation": "A composite B-Tree `(A, B, C)` is sorted first by `A`, then `B`, then `C`—like a phone book sorted by `(City, LastName, FirstName)`. Searching without `A` (`merchant_id`) scatters matching `status` rows across every merchant subtree. Creating `(status, created_at) INCLUDE (id, amount)` (or a partial index `WHERE status = 'FAILED'`) lets Postgres seek directly and even skip heap table fetches via an Index-Only Scan.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Backwards belief about `SELECT *`",
+        "whyWrong": "`SELECT *` actually prevents Index-Only Scans because extra columns force heap fetches; projecting only needed columns enables covering indexes."
+      },
+      "1": {
+        "keyInsight": "Match composite index column order to equality predicates first, range predicates second, and `INCLUDE` projected columns for Index-Only Scans."
+      },
+      "2": {
+        "trap": "Maintenance cargo-culting",
+        "whyWrong": "`VACUUM FULL` takes an exclusive table lock and reclaims bloat, but cannot make a non-leading-column B-Tree searchable by `status`."
+      },
+      "3": {
+        "trap": "Irrelevant column type swap",
+        "whyWrong": "In PostgreSQL `VARCHAR` and `TEXT` share the exact same underlying varlena storage and B-Tree mechanics."
+      }
+    },
+    "wisdomTakeaway": "Design composite indexes like phone books: equality columns first, range/sort columns next, and `INCLUDE` payload columns to eliminate table heap hops."
+  },
+  {
+    "id": "OPT-07",
+    "pillar": "optimization",
+    "difficulty": "Senior",
+    "concept": "Profiling First & N+1 Detection",
+    "scenario": "A `/dashboard` endpoint takes 950ms p95. A developer guesses JSON serialization is slow and spends 3 days swapping Jackson for a faster JSON library, gaining only 4ms. Flamegraphs and SQL traces then show 1 query for 80 projects followed by 80 separate `SELECT * FROM tasks WHERE project_id = ?` queries and 80 `GET /users/:id` calls.",
+    "question": "What two optimization principles were violated, and what fixes the endpoint?",
+    "options": [
+      "Always rewrite JSON serializers in C++ first; keep the 80 queries.",
+      "Profile before optimizing (measuring showed I/O round trips dominated 99% of time, not CPU serialization), and eliminate the N+1 query/RPC loop using a batched `WHERE project_id = ANY(?)` SQL query and a batched `POST /users:batchGet` (or DataLoader) call.",
+      "Move the 80 SQL queries into 80 parallel cron jobs.",
+      "Increase database CPU cores from 4 to 64 so each of the 80 queries runs faster."
+    ],
+    "correctIndex": 1,
+    "explanation": "Guessing without profiling optimizes a 4ms CPU step while ignoring 940ms of serial network round trips! Replacing 80 sequential SQL queries and 80 HTTP calls with 1 batched SQL query (`JOIN` or `ANY($1)`) and 1 batched user lookup slashes network RTTs from 161 down to 2, often cutting latency from 950ms to <25ms.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Sunk-cost micro-optimization",
+        "whyWrong": "Serializing 80 items in memory takes ~2-5ms in any modern runtime; you cannot CPU-optimize away 160 network round trips."
+      },
+      "1": {
+        "keyInsight": "Measure with distributed traces/flamegraphs first, then collapse N+1 round trips into batched queries."
+      },
+      "2": {
+        "trap": "Cron jobs don't serve live synchronous dashboard requests",
+        "whyWrong": "Unless precomputing materialized views (a much bigger architectural choice), arbitrary cron jobs don't fix live request queries."
+      },
+      "3": {
+        "trap": "Scaling CPU for a sequential network-RTT bottleneck",
+        "whyWrong": "Even if each SQL query ran in 0.1ms on 64 cores, 160 sequential network round trips over TCP still burn hundreds of milliseconds."
+      }
+    },
+    "wisdomTakeaway": "Never optimize by intuition: look at a trace/flamegraph first, and crush network round trips (N+1s) before touching micro-benchmarks."
+  },
+  {
+    "id": "OPT-08",
+    "pillar": "optimization",
+    "difficulty": "Staff / Principal",
+    "concept": "Negative Caching & Cache Penetration",
+    "scenario": "A botnet scrapes `/products/{random_uuid}` at 20,000 RPS with invalid UUIDs. Your Cache-Aside layer checks Redis, gets a miss for every fake UUID, queries PostgreSQL `WHERE id = ?`, gets 0 rows, and skips writing to Redis because 'there's nothing to cache'. PostgreSQL falls over.",
+    "question": "What cache vulnerability is this, and how do you harden the read path?",
+    "options": [
+      "Cache Stampede; increase product cache TTL from 1 hour to 24 hours.",
+      "Cache Penetration; defend with Negative Caching (store a short-TTL sentinel like `NULL_ENTRY` for 60s on misses) and/or an in-memory Bloom Filter / input format validation in front of Redis/DB to reject non-existent IDs before touching Postgres.",
+      "Hot-Key skew; enable Redis Cluster sharding.",
+      "Write-Behind lag; switch Redis to AOF `fsync=always`."
+    ],
+    "correctIndex": 1,
+    "explanation": "Cache Penetration happens when queries for non-existent keys bypass the cache every single time and hit the backing database directly. Negative caching (caching 'does not exist' with a short 30–120s TTL, carefully invalidating if created) plus a Bloom filter / strict ID pre-check absorbs bot floods in RAM before PostgreSQL sees a single query.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Misidentifying Penetration as Stampede",
+        "whyWrong": "Stampede is one hot valid key expiring; Penetration is millions of *non-existent* distinct keys bypassing the cache completely."
+      },
+      "1": {
+        "keyInsight": "Caching absence (with short TTLs) or checking a Bloom Filter turns uncached 404 floods into cheap O(1) memory hits."
+      },
+      "2": {
+        "trap": "Adding shards when every key is a unique miss",
+        "whyWrong": "20,000 distinct random UUIDs already hash evenly across Redis shards—and still miss on every shard, hitting Postgres at 20,000 RPS."
+      },
+      "3": {
+        "trap": "Tuning Redis disk persistence for a read-miss attack",
+        "whyWrong": "AOF `fsync=always` slows down Redis writes and has zero effect on read-miss penetration."
+      }
+    },
+    "wisdomTakeaway": "Your cache must protect the database from 'not found' floods too—validate shapes early, negative-cache misses briefly, or filter with a Bloom filter."
+  },
+  {
+    "id": "OPT-09",
+    "pillar": "optimization",
+    "difficulty": "Senior",
+    "concept": "Event Loop Blocking & Mixed CPU/IO Workloads",
+    "scenario": "A Node.js API Gateway normally handles 8,000 RPS at 12ms p99 using <25% CPU. After a team adds PDF thumbnail generation and large 5MB regex/bcrypt parsing directly inside one route handler, ALL unrelated `/health` and `/auth` routes freeze for 300–900ms every few seconds.",
+    "question": "Why does one route freeze the entire gateway, and how do you restore low p99 latency?",
+    "options": [
+      "Node.js garbage collection runs on TCP sockets; switch from JSON to XML.",
+      "CPU-bound synchronous work (PDF/bcrypt/catastrophic regex) blocks the single-threaded JavaScript event loop, starving every queued I/O callback on that process. Offload CPU-heavy tasks to worker threads / separate isolated worker services, and enforce async non-blocking limits.",
+      "Increase `UV_THREADPOOL_SIZE` to 1,024 while keeping PDF rendering synchronous in the handler.",
+      "Add more async `Promise.all()` wrappers around the synchronous PDF function."
+    ],
+    "correctIndex": 1,
+    "explanation": "Single-threaded event loops (Node.js, Python asyncio, single-threaded Redis) achieve huge I/O concurrency ONLY when every callback yields in microseconds. A 300ms synchronous CPU block freezes the entire event loop for all concurrent requests on that process. Isolating heavy CPU work into dedicated worker pools/services keeps the I/O event loop responsive.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Nonsensical diagnosis",
+        "whyWrong": "XML parsing is actually heavier than JSON and doesn't fix synchronous event-loop CPU starvation."
+      },
+      "1": {
+        "keyInsight": "Never execute synchronous CPU-intensive or blocking work on an asynchronous I/O event-loop thread."
+      },
+      "2": {
+        "trap": "Thinking libuv threadpool helps main-thread synchronous JS",
+        "whyWrong": "`UV_THREADPOOL_SIZE` only expands background C++ libuv workers (fs/dns/crypto async APIs); synchronous JS execution in the handler still runs on the single main event-loop thread."
+      },
+      "3": {
+        "trap": "`Promise.all` illusion of parallelism",
+        "whyWrong": "Wrapping synchronous CPU code in `async/await` or `Promise.all` still executes sequentially on the single main JS thread."
+      }
+    },
+    "wisdomTakeaway": "Event-loop architectures scale I/O concurrency brilliantly and collapse catastrophically the moment someone puts synchronous CPU work on the loop."
+  },
+  {
+    "id": "OPT-10",
+    "pillar": "optimization",
+    "difficulty": "Intermediate",
+    "concept": "Batching vs Latency Trade-off & Streaming",
+    "scenario": "An IoT Telemetry Ingestion Service receives 50,000 sensor events/sec and inserts each event as a single-row `INSERT INTO readings ...` transaction into PostgreSQL/TimescaleDB with `synchronous_commit = on`. Disk fsync IOPS hits 100% and ingestion falls behind.",
+    "question": "Which optimization gives the largest immediate throughput jump at the lowest complexity?",
+    "options": [
+      "Micro-batch incoming events in memory (e.g., flush every 500 events OR every 50ms, whichever comes first) using bulk `COPY` / multi-row `INSERT`, amortizing per-transaction fsync and network RTT overhead by 100x+.",
+      "Open 50,000 concurrent connections so every sensor writes in parallel.",
+      "Disable all indexes AND delete primary keys permanently while keeping 50,000 single-row transactions/sec.",
+      "Store every single sensor reading as a separate `.json` file on NFS."
+    ],
+    "correctIndex": 0,
+    "explanation": "Every individual ACID `INSERT` pays a network RTT, WAL write, and disk `fsync()` penalty. Micro-batching 500 rows (or capping max wait at 50ms) collapses 50,000 WAL flushes/sec down to ~100 bulk `COPY` flushes/sec—boosting write throughput by 10x–100x with bounded 50ms ingestion delay.",
+    "distractorAnalysis": {
+      "0": {
+        "keyInsight": "Amortizing network round trips and disk `fsync()` via bounded time/size micro-batching unlocks massive write throughput."
+      },
+      "1": {
+        "trap": "Multiplying concurrency into a disk fsync bottleneck",
+        "whyWrong": "50,000 concurrent connections thrash CPU and still demand 50,000 WAL commits unless group-commit/batching occurs."
+      },
+      "2": {
+        "trap": "Breaking queryability without removing the per-tx fsync bottleneck",
+        "whyWrong": "50,000 separate transactions/sec still choke on WAL `fsync()` and network RTT even on an unindexed heap table."
+      },
+      "3": {
+        "trap": "Catastrophic metadata I/O explosion",
+        "whyWrong": "Creating 50,000 tiny files/sec on NFS obliterates filesystem metadata ops and makes querying impossible."
+      }
+    },
+    "wisdomTakeaway": "When write IOPS or network RTT bottlenecks ingestion, micro-batch with a tight `(max_count, max_wait_ms)` bound to trade milliseconds for orders-of-magnitude throughput."
+  },
+  {
+    "id": "SCA-01",
+    "pillar": "scalability",
+    "difficulty": "Staff / Principal",
+    "concept": "Universal Scalability Law (Contention vs Coherency)",
+    "scenario": "Your team scales a stateful cluster from 4 nodes to 16 nodes. At 8 nodes, throughput reaches 6,200 TPS. At 16 nodes, throughput unexpectedly DROPS to 4,800 TPS even though CPU is only 55% on each node, and cross-node cache-invalidation/lock-coordination network traffic has quadrupled.",
+    "question": "According to Gunther's Universal Scalability Law (USL), what explains throughput *decreasing* as nodes increase?",
+    "options": [
+      "Amdahl's Law predicts throughput drops past 8 nodes for every distributed system.",
+      "Non-zero coherency penalty (`beta > 0`) from pairwise cross-node synchronization/cache invalidation grows quadratically `O(N^2)`, causing retrograde scaling where nodes spend more cycles coordinating state than doing useful work. Eliminate or partition shared mutable state.",
+      "TCP ports wrap around past 8 nodes.",
+      "Because 16 is an even power of 2, hash collisions double."
+    ],
+    "correctIndex": 1,
+    "explanation": "Amdahl's Law only plateaus asymptotically; it never goes downward. Gunther's USL (`C(N) = N / (1 + alpha(N-1) + beta*N*(N-1))`) adds the quadratic coherency term `beta*N*(N-1)`. When `beta > 0` (chatty distributed locks, cluster-wide cache coherency, synchronous consensus across all nodes), adding more nodes actively *reduces* total throughput past `N_max`. The fix is sharding/partitioning state so nodes don't synchronize globally.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Confusing Amdahl's plateau with USL retrograde collapse",
+        "whyWrong": "Amdahl's Law `1 / (sigma + (1-sigma)/N)` is strictly monotonically increasing—it approaches `1/sigma` asymptotically and never predicts throughput *dropping*."
+      },
+      "1": {
+        "keyInsight": "Pairwise cross-node coordination (`beta`) scales quadratically; past the inflection point, adding nodes shrinks total capacity until you shard/decouple state."
+      },
+      "2": {
+        "trap": "Invented OS networking myth",
+        "whyWrong": "TCP has 65,535 ports per IP tuple and does not wrap around at 8 cluster nodes."
+      },
+      "3": {
+        "trap": "Misunderstanding power-of-two sizing",
+        "whyWrong": "Powers of two are standard in consistent hashing and memory alignment and do not trigger quadratic collision spikes."
+      }
+    },
+    "wisdomTakeaway": "If adding nodes makes your cluster slower, you have a coherency tax (`beta > 0`)—stop adding machines and remove the global cross-node coordination."
+  },
+  {
+    "id": "SCA-02",
+    "pillar": "scalability",
+    "difficulty": "Senior",
+    "concept": "Shard Key Selection & Hot Partitions",
+    "scenario": "A multi-tenant B2B analytics platform shards a 40TB `events` table across 16 PostgreSQL shards. An engineer proposes sharding by `tenant_id`, knowing 1 enterprise tenant ('MegaCorp') generates 65% of all daily events while 4,999 SMB tenants share the remaining 35%.",
+    "question": "What failure will `hash(tenant_id)` cause, and how should you design the sharding key?",
+    "options": [
+      "`hash(tenant_id)` guarantees 1/16th of rows on every shard because MD5 is uniform.",
+      "MegaCorp's single `tenant_id` always hashes to ONE shard, leaving 1 shard at 100% disk/CPU saturation while 15 shards sit mostly idle. Use a composite/salted shard key such as `(tenant_id, bucket_id)` or `(tenant_id, event_id_prefix)` (with isolated/dedicated shards for giant tenants) so MegaCorp spreads across shards while queries still prune cleanly.",
+      "Shard strictly by `created_at` (current timestamp) so all shards stay balanced.",
+      "Add 16 more virtual nodes on MegaCorp's single shard."
+    ],
+    "correctIndex": 1,
+    "explanation": "A uniform hash function distributes *distinct keys* evenly, NOT *skewed volume per key*. One giant tenant still lands entirely on one shard! Splitting mega-tenants across bounded buckets `(tenant_id, hash(event_id) % K)` (or routing giant tenants to dedicated multi-shard pools while SMBs share normal tenant-keyed shards) balances load without turning every SMB query into a full cluster scatter-gather.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Confusing key-count uniformity with traffic/data-volume uniformity",
+        "whyWrong": "Hashing `MegaCorp` always yields the exact same integer, putting 65% of global traffic on 1/16th of your hardware."
+      },
+      "1": {
+        "keyInsight": "Bounded key salting / adaptive tenant-bucket sharding spreads mega-tenants without forcing scatter-gather for normal tenants."
+      },
+      "2": {
+        "trap": "Creating a moving write hot-spot on the newest time range",
+        "whyWrong": "Sharding by `created_at` directs 100% of current-second inserts to the single shard owning 'today', leaving all historical shards write-idle."
+      },
+      "3": {
+        "trap": "Confusing virtual nodes with splitting a single key",
+        "whyWrong": "Virtual nodes balance key ranges across physical servers; a single key (`MegaCorp`) still maps to only one vnode on one physical server at a time."
+      }
+    },
+    "wisdomTakeaway": "Uniform hashing only balances keys, never skew—design shard keys for cardinality AND volume distribution, especially with enterprise whales."
+  },
+  {
+    "id": "SCA-03",
+    "pillar": "scalability",
+    "difficulty": "Intermediate",
+    "concept": "Consistent Hashing & Rebalancing",
+    "scenario": "You cache 10TB of user sessions across 10 Memcached servers using `server = hash(user_id) % 10`. One server dies and you switch to `% 9` (or scale out to `% 11`). Suddenly cache hit rate collapses from 98% to ~9%, crashing your database.",
+    "question": "Why did losing 1 of 10 servers invalidate ~90% of the cache, and what fixes it?",
+    "options": [
+      "Memcached deletes all keys whenever a peer disconnects.",
+      "Modular hashing (`% N`) changes the target server for nearly every key (`~90%` remapped) whenever `N` changes. Use Consistent Hashing with Virtual Nodes so adding or removing 1 of N servers moves only `~1/N` (10%) of keys.",
+      "Store all 10TB of sessions in a single server so `N` is always 1.",
+      "Switch from MD5 to SHA-256 inside `hash(user_id) % N`."
+    ],
+    "correctIndex": 1,
+    "explanation": "Changing the modulus from 10 to 9 shifts `k % 10` to `k % 9` for ~90% of keys, causing a massive global cache miss storm. Consistent hashing arranges nodes (with ~100–200 virtual nodes each for smooth balance) on a hash ring so losing 1 of 10 nodes only relocates the ~10% of keys owned by that node.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Blaming the cache daemon instead of the client routing formula",
+        "whyWrong": "The surviving 9 Memcached servers still hold their old keys—clients just stopped routing to them because `% 9` sends requests elsewhere."
+      },
+      "1": {
+        "keyInsight": "Consistent hashing decouples key placement from cluster size N, bounding key churn to `O(1/N)` during scaling or failures."
+      },
+      "2": {
+        "trap": "Giving up horizontal scale and high availability",
+        "whyWrong": "10TB exceeds typical single-node RAM and creates a catastrophic single point of failure."
+      },
+      "3": {
+        "trap": "Changing hash algorithm doesn't fix modulo instability",
+        "whyWrong": "`sha256(key) % 9` still remaps ~90% of keys compared to `sha256(key) % 10`."
+      }
+    },
+    "wisdomTakeaway": "Never use `hash(key) % N` for stateful partitions or caches where N can change—use consistent hashing with virtual nodes."
+  },
+  {
+    "id": "SCA-04",
+    "pillar": "scalability",
+    "difficulty": "Senior",
+    "concept": "Replication Lag & Read-Your-Writes Consistency",
+    "scenario": "To scale reads, you route all `GET` requests to asynchronous PostgreSQL read replicas (typical lag 50ms, peaking at 3s during bulk jobs). Users edit their profile (`POST /profile` -> primary), get redirected immediately (`GET /profile` -> replica), see their OLD bio, panic, and click Save 5 times.",
+    "question": "How do you preserve read-replica scalability while guaranteeing Read-Your-Writes consistency for the author?",
+    "options": [
+      "Make all PostgreSQL replication synchronous across every replica on every query.",
+      "Track a brief read-your-own-writes window (or store the user's latest write WAL LSN/timestamp in a cookie/session) and route that user's own reads to the primary (or wait briefly for a replica whose applied LSN >= user's write LSN) while keeping general traffic on replicas.",
+      "Eliminate read replicas and run every `GET` against the primary.",
+      "Add a `sleep(5000)` in the frontend after every `POST`."
+    ],
+    "correctIndex": 1,
+    "explanation": "Full synchronous replication hurts write latency and availability if one replica lags. Instead, Read-Your-Writes only needs consistency for the *specific user who just mutated state*. Passing the commit WAL LSN (or a 5-second session 'recently wrote' flag) routes only that user's immediate reads to the primary or a caught-up replica—99%+ of read traffic still scales cleanly on replicas.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Sacrificing write availability and latency globally",
+        "whyWrong": "Synchronous wait across all read replicas makes a single slow replica stall every write in the system."
+      },
+      "1": {
+        "keyInsight": "Causal/LSN session tracking gives users strong read-your-writes illusions while keeping 99% of reads horizontally scaled on async replicas."
+      },
+      "2": {
+        "trap": "Throwing away read scalability unnecessarily",
+        "whyWrong": "General browsing reads by other users rarely need sub-second consistency with another stranger's profile edit."
+      },
+      "3": {
+        "trap": "Punishing UX and still failing during >5s lag spikes",
+        "whyWrong": "Forcing every user to stare at a 5-second spinner feels broken and still fails whenever replication lag exceeds 5 seconds."
+      }
+    },
+    "wisdomTakeaway": "Don't make the whole database synchronous just for Read-Your-Writes—pin the mutating user's session to the primary or track their commit LSN."
+  },
+  {
+    "id": "SCA-05",
+    "pillar": "scalability",
+    "difficulty": "Staff / Principal",
+    "concept": "Load Shedding & Protecting Goodput",
+    "scenario": "During a viral Super Bowl ad spike (5x normal load), your API pods auto-scale slowly (3 minutes to boot + warm caches). For those 3 minutes, incoming traffic queues in NGINX/app workers, every request takes 12s and times out at the 5s mobile client boundary, resulting in **0% successful checkouts** even though the backend has capacity for 1x–1.5x load.",
+    "question": "What scalability mechanism preserves maximum successful checkouts during sudden overload spikes?",
+    "options": [
+      "Increase NGINX `proxy_read_timeout` and queue buffers to 60 seconds so no request is dropped.",
+      "Priority-aware Load Shedding at the edge/ingress (e.g., adaptive concurrency limits like Little's Law/Vegas or priority queues): immediately reject excess and low-priority traffic (analytics, browse, bots) with 503 + `Retry-After` so critical `/checkout` requests within capacity finish in <200ms (100% goodput of available capacity).",
+      "Disable health checks so Kubernetes stops killing slow pods.",
+      "Ask the mobile app to automatically retry every timed-out 5s request 5 times immediately."
+    ],
+    "correctIndex": 1,
+    "explanation": "Without load shedding, queueing theory drives latency past client deadlines, meaning 100% of CPU work produces aborted responses (0% goodput!). Shedding excess traffic cheaply at the edge—prioritizing revenue/critical paths over background or non-essential calls—keeps latency inside SLO for the capacity you *do* have.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Deepening queues during overload (Bufferbloat)",
+        "whyWrong": "Longer server timeouts and huge queues force pods to waste CPU processing requests whose mobile users already disconnected 5 seconds ago."
+      },
+      "1": {
+        "keyInsight": "Serving 100% of your available capacity cleanly beats trying to serve 500% and failing everyone."
+      },
+      "2": {
+        "trap": "Hiding broken pods behind blind load balancing",
+        "whyWrong": "Disabling health checks keeps wedged pods in rotation and does nothing to reduce the 5x overload."
+      },
+      "3": {
+        "trap": "Turning a 5x spike into a 25x retry flood",
+        "whyWrong": "Immediate retries during overload amplify traffic into total collapse."
+      }
+    },
+    "wisdomTakeaway": "Under extreme overload, failing fast for excess low-priority load is the only way to keep critical paths fast and alive."
+  },
+  {
+    "id": "SCA-06",
+    "pillar": "scalability",
+    "difficulty": "Intermediate",
+    "concept": "Rate Limiting Algorithms (Fixed vs Sliding Window vs Token Bucket)",
+    "scenario": "You enforce a public API limit of `100 requests/minute` per API key using a naive Fixed Window counter (`INCR key:{minute}`). Attackers send 100 requests at `12:00:59` and another 100 requests at `12:01:01`—hitting your backend with 200 requests in 2 seconds.",
+    "question": "Which rate-limiting approach eliminates this boundary double-burst while supporting controlled short bursts cleanly?",
+    "options": [
+      "Switch to a Sliding Window Counter / Token Bucket algorithm (atomically enforced via Redis Lua script or edge Envoy/Cloudflare limiter).",
+      "Lower the fixed window limit to 1 request/minute.",
+      "Store all request timestamps per user in PostgreSQL and run `COUNT(*)` on every API request.",
+      "Move the counter from Redis to an in-memory `HashMap` inside each of your 30 API pods."
+    ],
+    "correctIndex": 0,
+    "explanation": "Fixed windows suffer up to 2x boundary bursts across minute edges. Sliding Window Counter smooths boundary edges in O(1) memory, and Token Bucket enforces a steady refill rate while allowing a explicitly bounded burst capacity (`bucket_size`), both executed atomically in Redis Lua scripts without race conditions.",
+    "distractorAnalysis": {
+      "0": {
+        "keyInsight": "Token Bucket / Sliding Window algorithms eliminate fixed-boundary double-bursts in O(1) per-key memory."
+      },
+      "1": {
+        "trap": "Breaking legitimate users instead of fixing the algorithm",
+        "whyWrong": "1 req/min makes normal API usage unusable while still permitting 2 requests across the boundary."
+      },
+      "2": {
+        "trap": "Turning your rate limiter into a database DDoS vector",
+        "whyWrong": "Writing and counting rows in PostgreSQL on every API call makes the rate limiter slower and weaker than the API it protects."
+      },
+      "3": {
+        "trap": "Per-pod local counters silently multiply limits by pod count",
+        "whyWrong": "30 independent in-memory HashMaps let an attacker send `30 * 100 = 3,000` requests/min under round-robin load balancing."
+      }
+    },
+    "wisdomTakeaway": "Never use uncoordinated per-pod counters or naive fixed windows for strict rate limits—use atomic Token Bucket or Sliding Window limiters."
+  },
+  {
+    "id": "SCA-07",
+    "pillar": "scalability",
+    "difficulty": "Senior",
+    "concept": "CQRS & Search/Analytics Offloading",
+    "scenario": "Your OLTP Orders PostgreSQL primary handles high-concurrency checkout writes cleanly, but Operations & Merchant Dashboards run complex multi-filter wildcard searches, facet counts, and aggregations (`LIKE '%shoe%'`, `GROUP BY status, region`), causing write lock contention and I/O stalls during checkout.",
+    "question": "Which architectural pattern decouples complex analytical/search reads from transactional write performance?",
+    "options": [
+      "Add 15 full-text GIN and composite indexes to the transactional `orders` table.",
+      "Apply CQRS: keep the normalized PostgreSQL primary purely for ACID transactional writes/single-key lookups, stream changes asynchronously (Outbox/CDC -> Kafka), and materialize denormalized search/facet projections in Elasticsearch/ClickHouse for merchant dashboards.",
+      "Run all merchant dashboard queries at 3 AM only and disable live dashboards.",
+      "Store orders in Elasticsearch as the primary source of truth for checkout payments."
+    ],
+    "correctIndex": 1,
+    "explanation": "OLTP writes and multi-facet wildcard search have fundamentally opposite storage and indexing physics. CQRS lets PostgreSQL stay lean and fast for ACID order mutations while an async CDC/Outbox pipeline feeds a read-optimized projection store (Elasticsearch for search/facets, ClickHouse for analytics), isolating dashboard spikes from checkout completely.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Death by write amplification",
+        "whyWrong": "Every extra GIN/composite index must be updated and WAL-logged on every order INSERT/UPDATE, directly slowing checkout writes and bloating RAM."
+      },
+      "1": {
+        "keyInsight": "Separate the transactional write model from specialized read projections when query shapes diverge sharply from write invariants."
+      },
+      "2": {
+        "trap": "Sacrificing core product capabilities unnecessarily",
+        "whyWrong": "Merchants need near-real-time order visibility during peak sales, not yesterday's stale batch report."
+      },
+      "3": {
+        "trap": "Using an eventually consistent search index as a financial ledger",
+        "whyWrong": "Elasticsearch lacks multi-row ACID transactions, foreign keys, and strict durable isolation needed for payment/inventory invariants."
+      }
+    },
+    "wisdomTakeaway": "When search/analytics queries start hurting transactional writes, don't overload OLTP with 20 indexes—project an async CQRS read model."
+  },
+  {
+    "id": "SCA-08",
+    "pillar": "scalability",
+    "difficulty": "Staff / Principal",
+    "concept": "Multi-Region Architecture: Home-Pinned vs Naive Active-Active",
+    "scenario": "Your collaboration SaaS expands from US to EU and APAC. Leadership asks for 'Active-Active multi-region' so EU users get <40ms latency and GDPR EU data residency, while global availability survives an entire AWS region outage.",
+    "question": "Why is naive Active-Active multi-master writes across US/EU/APAC usually a trap, and what is the superior scalable design?",
+    "options": [
+      "Naive cross-ocean multi-master writes hit speed-of-light RTT (~100-200ms) for synchronous consensus OR suffer painful split-brain write conflicts for async replication. Use Cellular / Home-Region Pinning (EU tenants' data & writes live in EU cells, US in US, APAC in APAC) with Geo-DNS edge routing and per-cell warm DR failover.",
+      "Run a single synchronous Raft cluster stretched across US-East, Frankfurt, and Tokyo for every user write.",
+      "Use eventual-consistency last-write-wins (LWW) on financial balances and permissions across all 3 regions.",
+      "Keep all databases in US-East and just deploy static CDN HTML in EU and APAC."
+    ],
+    "correctIndex": 0,
+    "explanation": "You cannot beat the speed of light (~140ms RTT US<->EU, ~200ms EU<->APAC). Global synchronous consensus makes every write slow everywhere; async multi-master causes lost updates/conflicts. Cellular home-region pinning keeps 99% of user writes fast and strictly compliant within their home region, while edge routing forwards rare cross-region access cleanly.",
+    "distractorAnalysis": {
+      "0": {
+        "keyInsight": "Cellular/home-region architectures deliver local latency, data residency, and regional fault isolation without distributed multi-master chaos."
+      },
+      "1": {
+        "trap": "Fighting the speed of light",
+        "whyWrong": "A Raft quorum across US-EU-Tokyo forces every write to wait ~150–250ms for cross-ocean RTTs AND still violates EU data-residency expectations if EU PII replicates to US."
+      },
+      "2": {
+        "trap": "Silent data corruption via LWW on non-commutative state",
+        "whyWrong": "Clock skew + Last-Write-Wins silently overwrites concurrent balance deductions or revokes/grants permissions unpredictably."
+      },
+      "3": {
+        "trap": "Ignoring API/DB latency and GDPR",
+        "whyWrong": "Static CDN assets don't fix 200ms dynamic API round trips to US-East or keep EU user data inside the EU."
+      }
+    },
+    "wisdomTakeaway": "Prefer home-region cellular isolation over global multi-master write complexity—respect both the speed of light and GDPR."
+  },
+  {
+    "id": "SCA-09",
+    "pillar": "scalability",
+    "difficulty": "Senior",
+    "concept": "Auto-Scaling Lag & Warm Capacity",
+    "scenario": "Every weekday at 9:00 AM sharp, 200,000 students log into an online exam platform within 90 seconds. CPU-based Kubernetes HPA (Horizontal Pod Autoscaler) scales pods when average CPU hits 70%, taking ~4 minutes to detect, provision nodes via Cluster Autoscaler, pull images, and warm JVM JIT caches. Exams fail at 9:00–9:05 AM daily.",
+    "question": "Why does reactive CPU HPA fail here, and what fixes predictable burst scaling?",
+    "options": [
+      "Lower the HPA CPU target from 70% to 65%.",
+      "Reactive CPU scaling is too slow for sub-2-minute step spikes and ignores cold-start/JVM warmup time. Combine Predictive/Scheduled pre-scaling (warm capacity scaled up at 8:50 AM), low-overhead overprovisioned buffer pods (pause-pod priority preemption), and fast-booting/pre-warmed runtimes—plus request queuing/admission jitter at login.",
+      "Switch from Kubernetes to bare metal and buy 10x servers running 24/7.",
+      "Scale based on Pod Disk Usage instead of CPU."
+    ],
+    "correctIndex": 1,
+    "explanation": "HPA polling + node provisioning + image pull + JVM warmup takes minutes, whereas a 9:00 AM class bell creates a vertical step-function spike in seconds. Scheduled pre-warming before known traffic waves, buffer capacity pods for instant preemption, and client login jitter absorb the cliff effortlessly without paying 24/7 idle hardware costs.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Tweaking threshold slightly while keeping the multi-minute lag",
+        "whyWrong": "65% vs 70% only triggers scaling a few seconds earlier; node provisioning, image pulls, and JVM warmup still miss the 90-second spike."
+      },
+      "1": {
+        "keyInsight": "When traffic spikes faster than infrastructure cold-starts, reactive auto-scaling is always too late—pre-scale predictably and maintain warm headroom."
+      },
+      "2": {
+        "trap": "Massive permanent overprovisioning for a 5-minute daily spike",
+        "whyWrong": "Paying 10x hardware 24 hours a day for predictable morning bursts wastes budget when scheduled cloud scaling works cleanly."
+      },
+      "3": {
+        "trap": "Using an irrelevant metric",
+        "whyWrong": "Login traffic spikes CPU, memory, and connections—disk usage barely moves during authentication bursts."
+      }
+    },
+    "wisdomTakeaway": "Reactive auto-scaling handles gradual diurnal curves, never vertical 9:00 AM cliff spikes—pre-warm predictably and design fast startup."
+  },
+  {
+    "id": "SCA-10",
+    "pillar": "scalability",
+    "difficulty": "Intermediate",
+    "concept": "Backpressure Across Async Pipelines",
+    "scenario": "A Video Transcoding API accepts uploads, pushes jobs into an in-memory unbounded `ArrayBlockingQueue` inside the API pods, and spawns worker goroutines/threads. When 5,000 users upload videos simultaneously, API pods crash with `OutOfMemoryError` (OOMKilled), losing all queued jobs.",
+    "question": "What fundamental scalability safeguard is missing and how do you fix it?",
+    "options": [
+      "Give the Kubernetes pods 128GB RAM so the in-memory queue never fills.",
+      "Replace unbounded in-memory queues with durable external queueing (SQS/Kafka) AND enforce bounded capacity + Backpressure (reject or throttle uploads at the edge with 429/503 once queue/token budgets saturate, and stream uploads directly to object storage via pre-signed URLs instead of buffering through API RAM).",
+      "Catch `OutOfMemoryError` in a `try/catch` block and continue accepting uploads.",
+      "Spawn 5,000 more transcoding threads inside the same API pod."
+    ],
+    "correctIndex": 1,
+    "explanation": "Unbounded in-memory queues violate backpressure: when producers outpace consumers, RAM fills until the process OOMs and loses every buffered job. Streaming binary video directly to S3 via pre-signed URLs keeps API pods lightweight, durable queues persist jobs outside pod memory, and bounded admission control pushes back upstream before memory exhausts.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Delaying OOM instead of bounding queues",
+        "whyWrong": "Even 128GB RAM fills during a sustained burst or downstream stall—and losing 128GB of unpersisted in-memory jobs on crash is worse, not better."
+      },
+      "1": {
+        "keyInsight": "Bound every queue, persist durable work outside ephemeral app RAM, and bypass API memory for large binary streams."
+      },
+      "2": {
+        "trap": "Attempting recovery after JVM/runtime heap exhaustion",
+        "whyWrong": "Once heap is exhausted, even allocating exception handlers or health responses fails, and Kubernetes cgroup OOMKiller terminates the container with SIGKILL."
+      },
+      "3": {
+        "trap": "Accelerating CPU and memory exhaustion",
+        "whyWrong": "5,000 concurrent video transcodes on one pod immediately exhaust both RAM and CPU cores."
+      }
+    },
+    "wisdomTakeaway": "An unbounded queue is just a delayed OOM crash; every buffer must be bounded, durable if critical, and capable of signaling backpressure."
+  },
+  {
+    "id": "CAP-01",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "Cross-Pillar Failure: Caching vs Consistency vs Integration",
+    "scenario": "An E-commerce platform caches inventory counts in Redis (`TTL = 60s`), runs async order-fulfillment workers via Kafka, and recently scaled Checkout pods from 10 to 80. During a flash sale on 500 limited-edition sneakers, 1,400 customers successfully pay and receive confirmation emails before `inventory` finishes decrementing.",
+    "question": "Which combination of Integration, Optimization, and Scalability design errors caused the oversell, and what is the clean fix?",
+    "options": [
+      "Kafka delivered messages too fast; slow down Kafka consumers.",
+      "Using a stale 60s cache + async eventual inventory check for a strict scarcity invariant! Keep authoritative atomic inventory reservation (`UPDATE inventory SET stock = stock - 1 WHERE sku = ? AND stock >= 1` or atomic Redis Lua reservation synced with DB) synchronously in the critical boundary, while keeping non-invariant side effects (emails, analytics, shipping labels) async via Outbox.",
+      "Increase Redis TTL from 60s to 10 minutes so inventory doesn't fluctuate.",
+      "Switch Checkout from REST to GraphQL so stock updates are typed."
+    ],
+    "correctIndex": 1,
+    "explanation": "Principal engineering wisdom separates *hard business invariants* (cannot sell 1,400 units of 500 physical sneakers) from *eventual side effects* (sending receipt emails). Caching stock for 60s and deferring deduction to an async queue guarantees overselling under flash concurrency. Atomic conditional reservation at the authoritative inventory boundary enforces correctness, while Outbox/Kafka scales downstream fulfillment asynchronously.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Blaming broker speed for an eventual-consistency invariant bug",
+        "whyWrong": "Slower Kafka delivery actually widens the oversell window rather than narrowing it."
+      },
+      "1": {
+        "keyInsight": "Never cache or defer hard scarcity/financial invariants behind eventual consistency; reserve atomically at the source of truth and make only downstream side effects async."
+      },
+      "2": {
+        "trap": "Worsening staleness 10x",
+        "whyWrong": "A 10-minute stale cache lets even more buyers pass validation after physical stock hits zero."
+      },
+      "3": {
+        "trap": "Wire protocol swap with zero effect on concurrency control",
+        "whyWrong": "GraphQL provides typed schemas, not atomic transactional stock reservation."
+      }
+    },
+    "wisdomTakeaway": "Know which invariants MUST be strongly consistent synchronously (money, scarce inventory) and which can be eventual (emails, search, analytics)."
+  },
+  {
+    "id": "CAP-02",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "Modularity vs Tail Latency vs Integration",
+    "scenario": "A team decomposes an Order Page into 14 fine-grained microservices (`CurrencyService`, `TaxRateService`, `PromoService`, `RoundingService`, etc.) communicating synchronously over HTTP. Now rendering `/order-preview` takes 680ms p99 (budget: 150ms), requires 14 circuit breakers, and fails whenever any of the 14 services has a deploy hiccup.",
+    "question": "How do you diagnose and rebalance Modularity, Integration, and Optimization here?",
+    "options": [
+      "Keep all 14 microservices and enable HTTP gzip compression between them.",
+      "Over-decomposition confused 'small functions' with 'network services'. Consolidate tightly coupled, chatty calculation modules (`Rounding`, `TaxRate`, `Currency`, `Promo`) into cohesive in-process modules inside one Pricing/Order Modular Monolith (turning 14 network RTTs into ~10 microseconds), and reserve service boundaries for genuinely independent scaling/ownership domains.",
+      "Add a global Redis cache in front of `RoundingService`.",
+      "Disable timeouts on all 14 HTTP clients so partial deploys don't trigger errors."
+    ],
+    "correctIndex": 1,
+    "explanation": "A service boundary should wrap a coarse-grained business capability, not a 50-line helper function. Splitting pure pricing/rounding calculations across 14 synchronous network hops destroys both availability (`0.999^14`) and tail latency while adding massive operational overhead. Folding chatty, co-changing pieces back into a Modular Monolith restores sub-millisecond in-process calls while keeping internal module boundaries crisp.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Optimizing wire bytes while 14x network RTT + tail amplification dominates",
+        "whyWrong": "Gzip on tiny pricing JSON payloads actually adds CPU latency and doesn't eliminate 14 serial/fan-out network hops or availability coupling."
+      },
+      "1": {
+        "keyInsight": "Cohesive, chatty logic belongs inside one process boundary; reserve network hops for true autonomous scaling or organizational boundaries."
+      },
+      "2": {
+        "trap": "Caching trivial CPU arithmetic over a network hop",
+        "whyWrong": "Calling Redis over the network to round a currency number is ~1,000x slower than computing it in process!"
+      },
+      "3": {
+        "trap": "Hiding outages via infinite hang",
+        "whyWrong": "Disabling timeouts turns every minor downstream hiccup into complete thread-pool starvation across the platform."
+      }
+    },
+    "wisdomTakeaway": "Every network hop you add taxes latency, availability, and debuggability—only cross the network when the autonomy payoff genuinely exceeds the distributed tax."
+  },
+  {
+    "id": "CAP-03",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "Metastable Failure Cascade",
+    "scenario": "Your platform normally handles 2,000 RPS smoothly at 35% DB CPU. A brief 10-second BGP route flap drops cache hit rate from 95% to 40%, pushing DB CPU to 100%, which pushes API latency from 40ms to 4s. The BGP flap heals in 10 seconds, yet 45 minutes later the entire platform is STILL wedged at 100% DB CPU and 4s latency.",
+    "question": "What phenomenon locked the system in a permanent degraded state after the trigger vanished, and how do you break the cycle?",
+    "options": [
+      "The BGP flap corrupted PostgreSQL's binary installation.",
+      "Metastable Failure: high latency caused threads to saturate (`L = lambda * W`), client/gateway retries multiplied DB queries, and cache rebuilds kept timing out before repopulating Redis—creating a self-sustaining overload loop. Break it via fast load shedding / circuit breaking to let DB recover and Redis repopulate (Singleflight), plus retry budgets.",
+      "Auto-scale API pods from 20 to 200 immediately so more pods hit the 100% saturated DB.",
+      "Flush all remaining keys in Redis to start fresh."
+    ],
+    "correctIndex": 1,
+    "explanation": "Metastable failures occur when a transient trigger pushes a system into a bad feedback equilibrium (retries + timed-out cache rebuilds + GC/lock thrashing) that sustains itself even after normal external load resumes. Only dropping excess work (circuit breakers, load shedding, retry budgets) drops DB load below the knee of the utilization curve so caches warm and normal equilibrium returns.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Superstitious binary blame",
+        "whyWrong": "Network route flaps don't corrupt database binaries; the system is trapped in queueing + retry dynamics."
+      },
+      "1": {
+        "keyInsight": "To escape a metastable failure state, you must deliberately cut incoming work (shed load + stop retries) below capacity until queues drain and caches warm."
+      },
+      "2": {
+        "trap": "Pouring gasoline on a database fire",
+        "whyWrong": "Adding 180 more API pods opens more DB connections and sends even more retries into a 100% saturated database."
+      },
+      "3": {
+        "trap": "Dropping remaining 40% cache hits to 0%",
+        "whyWrong": "Flushing Redis forces 100% of reads onto the already-collapsed database."
+      }
+    },
+    "wisdomTakeaway": "In a metastable outage, waiting it out fails—you must actively shed load and halt retries to drop utilization below the recovery threshold."
+  },
+  {
+    "id": "CAP-04",
+    "pillar": "capstone",
+    "difficulty": "Senior",
+    "concept": "Read-Through Migration & Zero-Downtime Cutover",
+    "scenario": "You are extracting `Notifications` out of a 12-year-old monolith into a new modular service (Strangler Fig). Millions of user notification preferences still live in the monolith's `users` table, and legacy monolith code still updates them in 18 places while you build the new service.",
+    "question": "How do you integrate and synchronize data cleanly during the multi-week transition without losing updates or breaking rollback?",
+    "options": [
+      "Take a one-time `pg_dump` on Monday and tell users not to change preferences for 3 weeks.",
+      "Use CDC/Outbox from the monolith's `users` preference columns to stream live updates into the new Notifications DB, run shadow read-parity checks comparing old vs new results, cut over reads first via feature flag, then flip writes to the new service (with reverse-sync or clean cutover) once parity hits 100%.",
+      "Have the new Notifications service execute direct cross-DB `JOIN`s against the monolith's `users` table forever.",
+      "Delete the preference columns from the monolith immediately before building the new UI."
+    ],
+    "correctIndex": 1,
+    "explanation": "Strangler Fig data migrations require keeping the new module's store continuously synchronized via CDC/Outbox while legacy writers are still active, verifying parity silently in production using shadow comparisons, migrating reads first (zero write risk, trivial rollback), and migrating writes last once confidence is 100%.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Static snapshot drift",
+        "whyWrong": "A static dump goes stale the second a user updates preferences on Monday afternoon."
+      },
+      "1": {
+        "keyInsight": "Continuous CDC backfill + shadow parity verification + read-then-write flag flip keeps migration reversible at every step."
+      },
+      "2": {
+        "trap": "Permanent database coupling",
+        "whyWrong": "Leaving cross-DB joins against the monolith's `users` table defeats the entire modular extraction."
+      },
+      "3": {
+        "trap": "Breaking live production callers before replacement exists",
+        "whyWrong": "Deleting legacy columns breaks 18 active monolith paths immediately."
+      }
+    },
+    "wisdomTakeaway": "Migrate data-heavy modules in four safe beats: Backfill + Live Sync -> Shadow Read Parity -> Cutover Reads -> Cutover Writes."
+  },
+  {
+    "id": "CAP-05",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "Observability & Incident Triage Order",
+    "scenario": "At 2:14 PM, p99 latency on `/api/v1/feed` jumps from 120ms to 8.5s and 502 errors climb to 18%. Dashboards show: API CPU is 15% (very low!), Redis hit rate is 97%, DB primary CPU is 22%, yet `active_http_workers` is pinned at 100% and outbound socket wait time to `recommendation-ml` jumped from 35ms to 8,200ms.",
+    "question": "Following disciplined diagnostic reasoning, what is the immediate bottleneck and highest-leverage mitigation?",
+    "options": [
+      "API CPU is low because Python/Go needs more compiler optimization flags; redeploy with `-O3`.",
+      "API worker pools are saturated waiting on a severely degraded `recommendation-ml` dependency (`L = lambda * W`). Immediately trip/tune the circuit breaker + tight timeout + bulkhead on `recommendation-ml` and serve a graceful fallback (popular/cached feed) so `/api/v1/feed` recovers in seconds.",
+      "Scale up the PostgreSQL primary to twice as many vCPUs.",
+      "Disable Redis caching because 97% hit rate isn't 100%."
+    ],
+    "correctIndex": 1,
+    "explanation": "Low API CPU + low DB CPU + 100% active worker threads + 8.2s outbound wait on `recommendation-ml` proves the bottleneck is downstream I/O stall, not local compute or DB. Tripping the circuit breaker / degrading gracefully to a fallback non-ML feed frees all blocked workers immediately and restores core user experience.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Ignoring I/O wait telemetry",
+        "whyWrong": "CPU is at 15% because workers are asleep waiting on slow sockets—compiler flags won't speed up a stalled remote ML service."
+      },
+      "1": {
+        "keyInsight": "Low CPU + pinned worker threads almost always means downstream I/O stall; degrade non-essential ML/enrichment dependencies to protect core UX."
+      },
+      "2": {
+        "trap": "Scaling a healthy database at 22% CPU",
+        "whyWrong": "The DB isn't even busy; scaling Postgres adds cost and causes a brief failover blip during an unrelated incident."
+      },
+      "3": {
+        "trap": "Destroying a healthy 97% cache shield",
+        "whyWrong": "Turning off Redis would overload the healthy DB on top of the ML outage."
+      }
+    },
+    "wisdomTakeaway": "Always build graceful degradation fallbacks for non-critical enrichments (recommendations, avatars, badges)—never let an ML sidecar take down your core feed."
+  },
+  {
+    "id": "CAP-06",
+    "pillar": "capstone",
+    "difficulty": "Senior",
+    "concept": "Idempotency + Webhook Storms",
+    "scenario": "You integrate with a Shipping Carrier webhook (`POST /webhooks/tracking`). Due to a carrier bug, they deliver the same `package_delivered` webhook 40 times in 3 seconds for each parcel, and occasionally out of order (`delivered` arrives 200ms before `out_for_delivery`).",
+    "question": "How do you harden your webhook ingestion endpoint against duplicates AND out-of-order state regressions?",
+    "options": [
+      "Return HTTP 500 on duplicate webhooks so the carrier stops sending them.",
+      "Verify webhook cryptographic signature, persist/deduplicate by `(provider, event_id)` atomically, enforce monotonic state-transition rules (ignore `out_for_delivery` if order is already `delivered` via state machine or event timestamp/version guard), and enqueue heavy processing asynchronously while returning HTTP 200 fast.",
+      "Put a `sleep(5)` inside the webhook HTTP handler to wait for all events to arrive in order.",
+      "Overwrite `shipment.status = payload.status` blindly on every webhook."
+    ],
+    "correctIndex": 1,
+    "explanation": "External webhooks are famously at-least-once and out-of-order. Returning 200 fast after signature verification + durable enqueueing avoids timeout retries from the carrier; atomic deduplication handles duplicates; and monotonic state-machine guards prevent an old `out_for_delivery` event from regressing a `delivered` shipment.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Triggering even MORE retries from the sender",
+        "whyWrong": "HTTP 500 tells every webhook provider 'delivery failed, keep retrying with backoff for 24 hours', amplifying the storm."
+      },
+      "1": {
+        "keyInsight": "External webhooks demand three shields: fast async 200 ack, idempotent event_id deduplication, and monotonic state-machine guards."
+      },
+      "2": {
+        "trap": "Blocking HTTP threads and triggering sender timeouts",
+        "whyWrong": "Sleeping 5 seconds exhausts your webhook workers and makes the carrier time out and retry even more."
+      },
+      "3": {
+        "trap": "Blind state overwrite regression",
+        "whyWrong": "Blindly overwriting status lets late `out_for_delivery` events falsely tell customers their already-delivered package isn't delivered."
+      }
+    },
+    "wisdomTakeaway": "Never trust external webhooks to arrive once or in order—ack fast, deduplicate atomically, and guard state transitions monotonically."
+  },
+  {
+    "id": "CAP-07",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "Right-Sizing Architecture (Anti-Resume-Driven Design)",
+    "scenario": "A 6-engineer B2B SaaS team handles 30 req/s steady (150 req/s peak) with 400GB of relational data. A new architect proposes splitting the codebase into 11 Go/Rust microservices, Kafka, Cassandra, Istio, and multi-region Active-Active Kubernetes clusters before launching v2.",
+    "question": "What is the wisest Principal Engineer critique of this proposal?",
+    "options": [
+      "Approve it because every serious modern system must start on Kafka, Cassandra, and 11+ microservices.",
+      "Reject the premature distributed complexity: 150 req/s and 400GB fit effortlessly inside a well-structured Modular Monolith on managed PostgreSQL (+ Outbox/worker queue + Redis + read replica if needed). 6 engineers operating 11 microservices + Istio + Cassandra will spend 80% of their capacity on infra toil instead of customer value.",
+      "Recommend switching the 11 microservices to 45 AWS Step Functions instead.",
+      "Tell them to drop all modularity and put all SQL queries inside frontend React components."
+    ],
+    "correctIndex": 1,
+    "explanation": "Architecture must be proportional to team size, operational maturity, and actual scale. At 150 req/s and 400GB, a single managed Postgres instance + Modular Monolith runs at ~5% utilization with full ACID guarantees and sub-10ms latency. Burdening 6 engineers with distributed consensus, Kafka/Cassandra ops, and multi-region conflict resolution destroys product velocity.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Cargo-culting hyperscaler complexity at startup scale",
+        "whyWrong": "Netflix/Uber infrastructure solves 1,000-engineer and 1M-RPS problems—at 6 engineers and 150 RPS, it creates pure drag."
+      },
+      "1": {
+        "keyInsight": "Simplicity with clean internal module seams beats premature distributed complexity—scale complexity only when real bottlenecks demand it."
+      },
+      "2": {
+        "trap": "Swapping microservice sprawl for serverless state-machine sprawl",
+        "whyWrong": "45 Step Functions still scatter domain cohesion and introduce distributed debugging complexity for a 6-person team."
+      },
+      "3": {
+        "trap": "False dichotomy between 'over-engineered microservices' and 'no modularity'",
+        "whyWrong": "Rejecting microservices does NOT mean abandoning modularity—a Modular Monolith gives clean boundaries with zero network tax."
+      }
+    },
+    "wisdomTakeaway": "Don't solve 10-million-QPS problems for a 150-QPS system; earn your distributed complexity one real bottleneck at a time."
+  },
+  {
+    "id": "CAP-08",
+    "pillar": "capstone",
+    "difficulty": "Senior",
+    "concept": "Rate-Limited Third-Party Integration + Queue Smoothing",
+    "scenario": "Your SaaS sends email/SMS campaigns. When a customer clicks 'Send to 500,000 users', your API fires 500k requests at a partner SMS vendor whose strict contract rate limit is 200 req/s. The vendor returns HTTP 429s, blocks your API key for 15 minutes, and drops 40% of messages.",
+    "question": "How do you integrate a bursty internal workflow with a strictly rate-limited external vendor cleanly?",
+    "options": [
+      "Reject customers with >200 subscribers from using your product.",
+      "Persist campaign recipients cleanly (Outbox/chunked batch jobs -> partitioned queue), process through a distributed Token Bucket / Leaky Bucket rate-limited worker pool capped at <=180 req/s (with per-tenant fair-share sub-queues so one 500k campaign doesn't starve 2FA OTPs!), and honor `Retry-After` on 429s.",
+      "Buy 50 different vendor API keys and rotate them blindly to bypass their rate limit.",
+      "Spin up 1,000 Lambda functions all calling the vendor simultaneously with 10 retries each."
+    ],
+    "correctIndex": 1,
+    "explanation": "External partner limits require decoupling bursty user triggers from steady-rate delivery. Queuing messages smoothly through a Leaky/Token Bucket paced below 200 req/s prevents 429 bans—and separating priority lanes (transactional 2FA OTPs vs bulk marketing campaigns) ensures one customer's 500k blast doesn't delay everyone else's login codes.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Breaking core product business value instead of engineering queue smoothing",
+        "whyWrong": "Campaign blasts are literally why customers pay for the platform; queuing smooths 500k spikes effortlessly."
+      },
+      "1": {
+        "keyInsight": "Buffer bursty demand into priority-isolated queues and pace outbound workers with a leaky/token bucket below the partner's ceiling."
+      },
+      "2": {
+        "trap": "Violating vendor Terms of Service and risking permanent account suspension",
+        "whyWrong": "Circumventing API limits via multi-key evasion violates contracts and leads to sudden account termination."
+      },
+      "3": {
+        "trap": "Amplifying the 429 ban with 1,000 concurrent callers",
+        "whyWrong": "1,000 Lambdas x 10 retries hits the vendor even harder and triggers immediate key revocation."
+      }
+    },
+    "wisdomTakeaway": "Always isolate priority lanes (OTPs vs bulk marketing) and pace outbound calls to external rate-limited vendors via queued leaky buckets."
+  },
+  {
+    "id": "CAP-09",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "Write Amplification, Hot Counter Contention & Sharded Counters",
+    "scenario": "On a social video platform, a viral video receives 25,000 `like` taps per second. Each tap executes `UPDATE videos SET likes_count = likes_count + 1 WHERE id = 42` inside PostgreSQL. Row-level locking on `id = 42` serializes all 25,000 updates, creating huge lock queues and degrading the entire database.",
+    "question": "How do you scale single-row hot counter updates without breaking database throughput or losing counts?",
+    "options": [
+      "Switch transaction isolation level to `SERIALIZABLE`.",
+      "Decouple the hot row lock: either buffer/aggregate increments in Redis/Kafka micro-batches (flushing delta `+N` every 1–2s to Postgres) OR shard the counter row into K sub-rows `(video_id=42, bucket=0..63)` so writers spread across 64 rows and readers sum or read a cached total.",
+      "Add 10 read replicas to handle the 25,000 `UPDATE` statements.",
+      "Index `likes_count` with a B-Tree index."
+    ],
+    "correctIndex": 1,
+    "explanation": "In PostgreSQL/MySQL, updating the exact same row acquires an exclusive row lock—making 25,000 concurrent taps strictly serial (Amdahl's Law `sigma = 1`!). Sharding the counter into 64 buckets cuts row-lock contention 64x, and stream/Redis delta-batching collapses 25,000 row updates/sec into ~1 `likes_count = likes_count + 25000` update/sec.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Increasing serialization aborts instead of reducing row contention",
+        "whyWrong": "`SERIALIZABLE` triggers massive serialization failure retries on hot rows, making throughput even worse."
+      },
+      "1": {
+        "keyInsight": "Eliminate single-row write hotspots by either coalescing deltas asynchronously or sharding one logical counter across K physical sub-rows."
+      },
+      "2": {
+        "trap": "Trying to scale writes with read-only replicas",
+        "whyWrong": "Read replicas cannot accept `UPDATE` statements; all 25,000 writes still collide on the single primary row."
+      },
+      "3": {
+        "trap": "Adding index maintenance overhead to a locked row",
+        "whyWrong": "Indexing `likes_count` forces extra index-entry churn on every tap while doing zero to relieve the single-row exclusive lock."
+      }
+    },
+    "wisdomTakeaway": "Single-row counters serialize writes completely—either batch increments before writing or shard the counter across N buckets."
+  },
+  {
+    "id": "CAP-10",
+    "pillar": "capstone",
+    "difficulty": "Staff / Principal",
+    "concept": "End-to-End Architecture Review & Failure Mode Analysis",
+    "scenario": "You are reviewing an RFC for a new high-volume Payment Ledger & Notification integration: (A) Core Ledger service exposes synchronous gRPC; (B) Webhook dispatcher reads Ledger tables directly via DB link; (C) Retries are unbounded with fixed 50ms sleep; (D) All tenant ledger rows live on one unpartitioned table with an integer auto-increment PK.",
+    "question": "Which assessment correctly prioritizes the architectural risks from most urgent correctness/availability threat to future scale?",
+    "options": [
+      "The integer PK is the only concern; items B and C are harmless implementation details.",
+      "Critical immediate risks: (1) Direct DB link breaks modular ownership & schema evolution (replace with Transactional Outbox + ACL/event contract), (2) Unbounded fixed-50ms retries guarantee retry storms on outage (add bounded exponential backoff + jitter + DLQ + idempotency). Medium-term scale risk: single unpartitioned ledger table will eventually hit write/vacuum limits (plan time/tenant partitioning early using UUIDv7/ULID or composite keys).",
+      "Replace gRPC with SOAP XML so notifications and ledger run in one process.",
+      "Remove the Ledger database entirely and store balances only in Kafka topics."
+    ],
+    "correctIndex": 1,
+    "explanation": "A Principal review distinguishes immediate outage/corruption traps from medium-term scaling curves. Direct cross-service DB links (Modularity/Integration) cause uncoordinated breakages and lock coupling, while unbounded non-jittered retries (Integration/Scalability) turn any hiccup into a full platform outage. Meanwhile, planning clean partitioning/IDs prepares the ledger for 10x growth without premature sharding today.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Obsessing over PK formatting while ignoring active outage & coupling bombs",
+        "whyWrong": "Unbounded retries and cross-service DB table coupling cause real production incidents within weeks, far before integer overflow or table size."
+      },
+      "1": {
+        "keyInsight": "Triage RFCs by blast radius: fix coupling and cascading-failure traps immediately, then design clean evolutionary seams for future data scale."
+      },
+      "2": {
+        "trap": "Regressing wire protocols without fixing architecture",
+        "whyWrong": "SOAP XML adds parsing overhead and doesn't fix DB coupling or unbounded retry storms."
+      },
+      "3": {
+        "trap": "Replacing transactional ACID ledger guarantees with raw topic scans",
+        "whyWrong": "Kafka isn't designed for random-access ACID balance checks and point-in-time relational queries."
+      }
+    },
+    "wisdomTakeaway": "Great RFC reviews rank risks ruthlessly: stop data corruption and cascading outages first, remove cross-boundary DB coupling second, and leave clean seams for 10x scale."
+  }
+]

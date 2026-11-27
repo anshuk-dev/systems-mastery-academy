@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Systems Mastery Academy — Integration, Modularity, Optimization &amp; Scalability</title>
+  <meta name="description" content="Principal-level interactive course and distractor-analysis Q&A lab for System Integration, Modular Architecture, System Optimization, and System Scalability." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" id="brand-home" role="button" tabindex="0">
+        <div class="brand-badge">SM</div>
+        <div>
+          <div class="brand-title">Systems Mastery Academy</div>
+          <div class="brand-sub">Knowledge &amp; Architectural Wisdom Lab</div>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" aria-label="Primary navigation">
+        <button class="nav-tab active" data-view="overview">Overview</button>
+        <button class="nav-tab" data-view="course">Course Modules</button>
+        <button class="nav-tab" data-view="quiz">Q&amp;A + Distractor Lab</button>
+        <button class="nav-tab" data-view="tools">Laws &amp; Calculators</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <div class="progress-pill" id="global-progress-pill" title="Overall mastery progress">
+          <span class="dot"></span>
+          <span id="progress-summary-text">0% Mastery</span>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle light or dark theme" title="Toggle theme">
+          Theme
+        </button>
+      </div>
+    </header>
+
+    <main id="main-content" class="main-content"></main>
+
+    <footer class="footer">
+      <div>Systems Mastery Academy &mdash; 5 Pillars &bull; 13 Deep Lessons &bull; 50 Scenario Q&amp;As &bull; 150 Distractor Analyses</div>
+      <div class="footer-links">
+        <a href="curriculum/01-integration.md" target="_blank" rel="noopener">Markdown Curriculum</a>
+        <a href="assessments/01-integration-qa.md" target="_blank" rel="noopener">Markdown Q&amp;A Bank</a>
+        <a href="https://github.com/anshuk-dev/systems-mastery-academy" target="_blank" rel="noopener">GitHub Repo</a>
+      </div>
+    </footer>
+  </div>
+
+  <script src="data/course-bundle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

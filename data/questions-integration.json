@@ -1,0 +1,342 @@
+[
+  {
+    "id": "INT-01",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Dual-Write Problem & Transactional Outbox",
+    "scenario": "Your Order Service creates an order in PostgreSQL, commits the transaction, and then calls `kafkaProducer.send(orderCreatedEvent)` on the next line. During a broker blip or pod OOM right after DB commit, ~0.3% of paid orders never reach the Warehouse Service, causing unshipped orders.",
+    "question": "Which architectural change permanently eliminates this partial-state inconsistency without introducing distributed 2PC locks?",
+    "options": [
+      "Wrap the PostgreSQL commit and the Kafka `send()` call inside a single `try/catch` block and roll back the DB transaction if Kafka throws.",
+      "Publish the Kafka event inside the DB transaction BEFORE calling `COMMIT` so both happen together.",
+      "Write the order row and an `outbox_events` row in the SAME local PostgreSQL ACID transaction, and stream the outbox table to Kafka via CDC or a polling relay.",
+      "Enable Kafka `acks=all` and `enable.idempotence=true` on the producer so the broker guarantees delivery after DB commit."
+    ],
+    "correctIndex": 2,
+    "explanation": "PostgreSQL and Kafka are separate distributed systems with no shared atomic commit protocol here. By persisting the domain state (`orders`) and the event payload (`outbox_events`) inside the same local ACID transaction, either both commit or both roll back. A separate Debezium CDC connector or polling relay reads committed outbox rows and publishes them at-least-once to Kafka, completely eliminating the dual-write gap.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Illusion of cross-system rollback",
+        "whyWrong": "Once `COMMIT` finishes in Postgres, `catch` cannot magically undo it cleanly—and if the pod is SIGKILLed or OOM-killed between commit and `send()`, the `catch` block never even executes. Conversely, rolling back after a transient network timeout when Kafka *did* receive the message creates the reverse ghost-event bug."
+      },
+      "1": {
+        "trap": "Holding DB transactions open across network I/O",
+        "whyWrong": "Publishing to Kafka *before* `COMMIT` creates two severe failures: (a) if Postgres later fails to commit (constraint violation, deadlock, node crash), consumers act on an order that never existed; (b) network latency to Kafka holds database row locks and connections open, tanking DB throughput."
+      },
+      "2": {
+        "keyInsight": "Local ACID atomicity across state + event record paired with asynchronous relay guarantees zero lost events without 2PC."
+      },
+      "3": {
+        "trap": "Confusing transport guarantees with application atomicity",
+        "whyWrong": "`acks=all` and producer idempotence only make Kafka's internal replication and retry within a live producer reliable—they cannot bridge the crash window between a separate PostgreSQL `COMMIT` and calling `send()`."
+      }
+    },
+    "wisdomTakeaway": "Whenever two separate data stores must stay consistent on write, pick ONE source of truth for the ACID commit and derive the second asynchronously via an Outbox."
+  },
+  {
+    "id": "INT-02",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Timeout Semantics & Idempotency",
+    "scenario": "A Checkout Service calls a third-party Payment Gateway's `POST /charges` endpoint with a 3-second read timeout. When the gateway gets slow, Checkout catches `SocketTimeoutException` and automatically retries twice. Finance reports double-charged customers.",
+    "question": "What is the root cause and the correct production fix?",
+    "options": [
+      "Increase the read timeout to 30 seconds and remove retries so the gateway always finishes in one attempt.",
+      "A read timeout means 'outcome unknown', not 'charge failed'. Attach a deterministic client-generated Idempotency-Key persisted with the checkout attempt, and ensure the gateway (or an internal ledger wrapper) deduplicates retries.",
+      "Switch from HTTP POST to HTTP PUT, because PUT requests are automatically safe from duplicate side effects on any server.",
+      "Check the customer's recent charges via `GET /charges?user_id=...` before retrying `POST /charges`."
+    ],
+    "correctIndex": 1,
+    "explanation": "On a read timeout, the TCP packet already reached the payment gateway and likely executed the charge; only the response packet was delayed or lost. Retrying without an idempotency key creates a second independent charge. Generating and persisting a deterministic `Idempotency-Key` tied to the order attempt lets safe retries return the original charge outcome without re-executing the debit.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Masking partial failure with huge timeouts",
+        "whyWrong": "A 30s timeout ties up caller worker threads/connections during gateway degradation (Little's Law saturation) AND still fails to solve true network drops after the server processed the charge."
+      },
+      "1": {
+        "keyInsight": "Network timeouts represent ambiguity, not failure; explicit idempotency keys make ambiguity safe to retry."
+      },
+      "2": {
+        "trap": "Relying on HTTP verb theory instead of server semantics",
+        "whyWrong": "HTTP specifications define PUT as idempotent conceptually, but an endpoint only becomes idempotent if the server implements deduplication or state replacement logic—a payment gateway won't change non-idempotent charge creation just because of the verb."
+      },
+      "3": {
+        "trap": "Time-of-Check to Time-of-Use (TOCTOU) race condition",
+        "whyWrong": "If the first charge is still in-flight or replicated asynchronously when `GET` runs, `GET` returns nothing, Checkout retries `POST`, and both charges succeed concurrently. Also fails if a legitimate repeat purchase happens seconds apart."
+      }
+    },
+    "wisdomTakeaway": "Never interpret a read timeout as 'nothing happened'; assume the mutation might have succeeded and require idempotency before any retry."
+  },
+  {
+    "id": "INT-03",
+    "pillar": "integration",
+    "difficulty": "Staff / Principal",
+    "concept": "Retry Amplification & Jitter",
+    "scenario": "An API Gateway calls Service A, which calls Service B, which calls Service C. Each hop has an HTTP client configured with 3 automatic retries and deterministic 100ms exponential backoff (100ms, 200ms, 400ms). Service C experiences a brief 2-second GC stall and recovers, yet the whole platform stays in a brownout for 20 minutes.",
+    "question": "Why did the outage persist long after Service C recovered, and which combination of fixes stops this pattern?",
+    "options": [
+      "Service C's circuit breaker stayed Open too long; remove circuit breakers so traffic immediately warms C back up.",
+      "Multiplicative retry amplification (up to 4^3 = 64x requests) plus synchronized deterministic backoff created a thundering retry storm; retry at only ONE layer with Full Jitter, propagate remaining request deadlines, and enforce a retry budget (e.g., max 10% retry ratio).",
+      "Switch all internal calls from REST/JSON to gRPC/Protobuf so retries finish faster.",
+      "Increase the backoff base from 100ms to 5,000ms at every service layer so Service C gets longer rest periods."
+    ],
+    "correctIndex": 1,
+    "explanation": "Layered retries multiply exponentially: 4 attempts at Gateway x 4 at A x 4 at B = 64 attempts at C per user request! Deterministic backoff synchronizes thousands of callers into lockstep waves. Retrying at only one edge/client layer (with deadline propagation so expired user requests aren't retried), adding Full Jitter to desynchronize waves, and capping total retries via a retry budget prevents metastable collapse.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Misdiagnosing protection as the cause",
+        "whyWrong": "Removing circuit breakers floods a recovering dependency with full traffic immediately, keeping it pinned in GC/CPU exhaustion."
+      },
+      "1": {
+        "keyInsight": "Eliminating multiplicative retry layers + desynchronizing with jitter + retry budgets breaks the metastable feedback loop."
+      },
+      "2": {
+        "trap": "Micro-optimizing serialization during a macro traffic storm",
+        "whyWrong": "Protobuf reduces per-request CPU slightly, but a 64x traffic amplification storm still overwhelms connection pools, threads, and downstream databases regardless of wire format."
+      },
+      "3": {
+        "trap": "Holding resources hostage while sleeping",
+        "whyWrong": "Sleeping 5s+ across all layers multiplies concurrency `L = lambda * W`, exhausting threads/file descriptors across Gateway, A, and B while still keeping the 64x multiplicative retry fan-out."
+      }
+    },
+    "wisdomTakeaway": "Retries across multiple network hops multiply into self-inflicted DDoS attacks—budget retries at one layer, add jitter, and respect caller deadlines."
+  },
+  {
+    "id": "INT-04",
+    "pillar": "integration",
+    "difficulty": "Intermediate",
+    "concept": "Anti-Corruption Layer (ACL)",
+    "scenario": "Your modern E-commerce Checkout domain integrates with a 15-year-old legacy ERP over SOAP XML where statuses are cryptic codes (`STAT_04_HLD`), prices are strings in local quirks, and customer IDs change format per country. Three new teams need ERP data this quarter.",
+    "question": "Where should the translation logic live to protect your core domains from legacy schema churn and cryptic semantics?",
+    "options": [
+      "Expose the ERP SOAP models directly in your internal GraphQL schema so every frontend and microservice can map the fields it needs.",
+      "Build a dedicated Anti-Corruption Layer (ACL) boundary adapter that translates ERP XML/quirks into clean, canonical domain types and events before any core service consumes them.",
+      "Ask the ERP vendor to rewrite their SOAP API into clean JSON REST endpoints before starting your feature work.",
+      "Replicate the ERP's internal database tables directly into every microservice's database using nightly CSV dumps."
+    ],
+    "correctIndex": 1,
+    "explanation": "An Anti-Corruption Layer isolates legacy messy semantics, protocols, and brittle models behind a translation boundary. Core services speak clean ubiquitous domain concepts (`OrderStatus.ON_HOLD`, `Money`), while all SOAP parsing, code mapping, and ERP bug workarounds live in one replaceable adapter.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Spreading legacy corruption everywhere",
+        "whyWrong": "Exposing raw ERP quirks to every caller duplicates fragile `if (STAT_04_HLD)` logic across multiple teams and locks the entire company to the legacy model."
+      },
+      "1": {
+        "keyInsight": "Quarantining external volatility inside an ACL keeps core business logic clean and makes eventual ERP replacement trivial."
+      },
+      "2": {
+        "trap": "Blocking delivery on an external dependency you don't control",
+        "whyWrong": "Legacy vendor rewrites take quarters or years and carry high risk; you need architectural isolation that works against the ERP as it exists today."
+      },
+      "3": {
+        "trap": "Coupling directly to internal physical schemas",
+        "whyWrong": "CSV table dumps bypass business invariants, create stale batch windows, and couple all microservices to internal ERP table layouts."
+      }
+    },
+    "wisdomTakeaway": "Never let an external vendor's data model become your internal domain language—translate at the border with an Anti-Corruption Layer."
+  },
+  {
+    "id": "INT-05",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Schema Evolution & Expand-Contract",
+    "scenario": "A Billing Service publishes `InvoiceIssued` Avro/Protobuf events to Kafka consumed by 6 independent downstream services. You need to rename `amount_cents` (int) to `total_money` (an object with `amount` and `currency`) without breaking any consumer or requiring coordinated big-bang deployments.",
+    "question": "Which rollout sequence guarantees zero-downtime backward and forward compatibility?",
+    "options": [
+      "Update the producer schema to replace `amount_cents` with `total_money`, bump the Kafka topic name to `invoice-issued-v2`, and force all 6 teams to deploy at midnight.",
+      "Use Expand-and-Contract: (1) Add `total_money` as an optional field while still populating `amount_cents`, (2) Consumers migrate to read `total_money` with fallback to `amount_cents`, (3) Once telemetry confirms zero readers of `amount_cents`, deprecate/stop populating it.",
+      "Keep the field name `amount_cents` in the schema and change its type from integer to a nested JSON string so no schema change is registered.",
+      "Delete `amount_cents` from the Schema Registry and restart Kafka brokers with compatibility mode set to `NONE`."
+    ],
+    "correctIndex": 1,
+    "explanation": "Expand-and-Contract decouples producer and consumer release schedules. Adding an optional `total_money` field is backward/forward compatible; dual-populating during transition allows all 6 teams to migrate safely on their own schedules, and telemetry verifies zero legacy readers before contracting.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Coordinated midnight deployments",
+        "whyWrong": "Forcing 6 independent teams into lockstep deployment destroys team autonomy and guarantees painful rollback coordination if one consumer fails."
+      },
+      "1": {
+        "keyInsight": "Additive expansion + dual population + telemetry-verified contraction enables zero-coordination schema evolution."
+      },
+      "2": {
+        "trap": "Silent semantic/type breaking change",
+        "whyWrong": "Changing an integer field's payload into a stringified object breaks strongly typed deserializers and causes silent runtime parsing failures."
+      },
+      "3": {
+        "trap": "Disabling safety rails instead of evolving safely",
+        "whyWrong": "Setting compatibility to `NONE` and deleting fields immediately crashes existing consumers deserializing either old historical events or new events."
+      }
+    },
+    "wisdomTakeaway": "In distributed event streams, never rename or change types in place—add the new field, populate both, verify consumers moved, then retire the old."
+  },
+  {
+    "id": "INT-06",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Saga Orchestration vs Choreography",
+    "scenario": "A Fintech lending workflow executes 6 ordered steps across KYC, Credit Scoring, Fraud Check, Escrow Hold, Loan Disbursement, and Ledger Booking—with strict regulatory SLA timeouts and distinct compensation rules if step 4 or 5 fails.",
+    "question": "Why is an explicit Saga Orchestrator strongly preferred over pure event Choreography here?",
+    "options": [
+      "Choreography cannot be used with Kafka or RabbitMQ when more than 3 services exist.",
+      "Orchestration centralizes state transitions, SLA timeout timers, and compensating step order in one inspectable state machine, preventing scattered cyclic logic across 6 teams.",
+      "Orchestration uses database 2PC locks under the hood so compensations are never needed.",
+      "Choreography always duplicates network traffic 6x compared to orchestration."
+    ],
+    "correctIndex": 1,
+    "explanation": "With 6 sequential conditional steps, strict timeouts, and ordered compensations, pure choreography scatters the workflow across 6 codebases—making it nearly impossible to answer 'what state is Loan #991 stuck in?' or change step ordering cleanly. An Orchestrator (e.g., Temporal or a dedicated state-machine service) keeps flow control, timers, and compensation explicit while domain services still own their business logic.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "False technical limitation",
+        "whyWrong": "Message brokers support dozens of choreographed consumers easily; the problem with choreography at 6+ conditional steps is cognitive and operational complexity, not broker capability."
+      },
+      "1": {
+        "keyInsight": "Complex multi-step workflows with timeouts and ordered rollbacks need centralized state visibility, not scattered implicit reactions."
+      },
+      "2": {
+        "trap": "Confusing Sagas with 2PC",
+        "whyWrong": "Sagas explicitly avoid distributed 2PC locks and *always* rely on compensating actions when downstream steps fail after earlier local commits."
+      },
+      "3": {
+        "trap": "Invented performance metric",
+        "whyWrong": "Orchestration actually sends command + reply messages through the coordinator (similar or slightly more hops than direct choreography); you choose orchestration for clarity and control, not fewer packets."
+      }
+    },
+    "wisdomTakeaway": "Use choreography for simple 'something happened, anyone interested react' fan-out; use orchestration when workflow order, timeouts, and compensation are core business invariants."
+  },
+  {
+    "id": "INT-07",
+    "pillar": "integration",
+    "difficulty": "Intermediate",
+    "concept": "Bulkhead Isolation",
+    "scenario": "Your API server exposes `/search`, `/checkout`, and `/export-pdf`. The `/export-pdf` endpoint calls a slow third-party rendering service. Whenever the PDF vendor slows down to 20s responses, `/checkout` and `/search` also start timing out with 503s even though their own databases are healthy.",
+    "question": "Which pattern prevents the slow PDF dependency from starving unrelated healthy endpoints?",
+    "options": [
+      "Bulkhead Pattern: isolate thread pools, connection pools, or semaphores per downstream dependency/workload so PDF rendering can exhaust only its own capped quota.",
+      "Increase the global web server worker thread pool from 200 to 2,000.",
+      "Add a global LRU response cache in front of `/export-pdf`.",
+      "Move `/export-pdf` from HTTP/1.1 to HTTP/2 multiplexing on the same shared worker pool."
+    ],
+    "correctIndex": 0,
+    "explanation": "Like watertight compartments on a ship, Bulkheads partition concurrency resources (threads, HTTP client pools, semaphore slots) per dependency or route. If the PDF vendor hangs and consumes all 15 PDF slots, new PDF requests fail fast while the 185 slots reserved for `/checkout` and `/search` remain completely unaffected.",
+    "distractorAnalysis": {
+      "0": {
+        "keyInsight": "Resource partitioning caps the blast radius of a single slow dependency so healthy paths keep their capacity."
+      },
+      "1": {
+        "trap": "Throwing unpartitioned capacity at a slow leak",
+        "whyWrong": "Without bulkheads, 2,000 threads will simply also get consumed by slow PDF calls during sustained degradation—plus 2,000 threads increase memory footprint and CPU context switching."
+      },
+      "2": {
+        "trap": "Assuming every slow endpoint is cacheable",
+        "whyWrong": "Custom user-specific PDF exports rarely have high cache hit rates, and cache misses still saturate the shared worker pool."
+      },
+      "3": {
+        "trap": "Confusing transport multiplexing with worker pool isolation",
+        "whyWrong": "HTTP/2 multiplexes TCP frames over one socket, which doesn't stop slow PDF work from holding every application worker thread on the shared pool."
+      }
+    },
+    "wisdomTakeaway": "Shared resource pools turn one slow external vendor into a total platform outage; isolate slow or untrusted dependencies behind dedicated bulkheads."
+  },
+  {
+    "id": "INT-08",
+    "pillar": "integration",
+    "difficulty": "Staff / Principal",
+    "concept": "Poison Pill & Dead Letter Queue Hygiene",
+    "scenario": "A Kafka consumer group processes `UserProfileUpdated` events across 12 partitions. One corrupted event triggers an unhandled `NullPointerException` during deserialization. Your consumer framework catches the exception, logs it, and refuses to commit the offset, retrying the same message forever.",
+    "question": "What happens to the system and what is the production-grade resolution?",
+    "options": [
+      "Only that single user is delayed; keep retrying indefinitely until a developer deploys a fix next week.",
+      "That entire partition stalls behind the poison-pill message (head-of-line blocking), backing up thousands of healthy users on the same partition. Route non-transient/deserialization failures after bounded retries to a Dead Letter Topic (DLT) with schema metadata, alert on DLT depth, and provide an audited replay tool.",
+      "Catch all exceptions and commit the offset anyway so throughput never drops.",
+      "Increase partitions from 12 to 120 so the poison pill affects fewer users."
+    ],
+    "correctIndex": 1,
+    "explanation": "Kafka commits offsets sequentially per partition, so one unprocessable poison pill halts 1/12th of all users indefinitely. Distinguishing transient infrastructure failures (retry with backoff / pause) from non-transient poison pills (malformed payload/code bug -> route to DLT with error headers + original offset + alert + replay workflow) preserves flow for healthy traffic without silent data loss.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Forgetting partition-level head-of-line blocking",
+        "whyWrong": "A Kafka partition holds events for ~8.3% of your entire keyspace, not just one user. Blocking offset commits freezes every user hashed to that partition."
+      },
+      "1": {
+        "keyInsight": "Separating non-transient poison pills into an alerted, replayable DLT unblocks healthy partition traffic without dropping data."
+      },
+      "2": {
+        "trap": "Silent data loss",
+        "whyWrong": "Swallowing exceptions and committing offsets permanently deletes business events with zero recovery path once log retention expires."
+      },
+      "3": {
+        "trap": "Reducing blast radius from 8% to 0.8% instead of fixing the stall",
+        "whyWrong": "0.8% of your customer base completely frozen for days is still a major incident, and you still lack a mechanism to recover the broken message."
+      }
+    },
+    "wisdomTakeaway": "Distinguish 'dependency temporarily down' (pause/backoff) from 'this message is toxic' (bounded retry -> alerted Dead Letter Topic with replay)."
+  },
+  {
+    "id": "INT-09",
+    "pillar": "integration",
+    "difficulty": "Intermediate",
+    "concept": "Thin Events vs Event-Carried State Transfer",
+    "scenario": "Every time a popular creator uploads a post, `ContentService` emits a thin event `{ postId: 123 }`. Immediately, 14 downstream microservices (Notifications, Search, Feed, Analytics, Moderation, Billing, etc.) all call `GET /posts/123` simultaneously.",
+    "question": "What integration flaw is occurring and how does Event-Carried State Transfer (ECST) resolve it?",
+    "options": [
+      "The broker is misconfigured; enable Kafka compression to shrink `{ postId: 123 }`.",
+      "Thin events force immediate synchronous callbacks from every consumer back to the producer (creating a self-inflicted read DDoS and restoring temporal coupling). Embedding the immutable snapshot of relevant post attributes in the event (ECST) lets consumers process asynchronously without calling back.",
+      "Put the post content in a Redis key and pass the Redis password in the event.",
+      "Replace Kafka with cron jobs polling `ContentService` every 5 seconds."
+    ],
+    "correctIndex": 1,
+    "explanation": "Thin notification events sound clean in theory, but when 14 services react concurrently, each event amplifies into 14 synchronous GET calls against `ContentService`—reintroducing temporal coupling and read spikes! Event-Carried State Transfer includes a well-versioned public state snapshot in the event so consumers remain autonomous.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Optimizing payload size when callback fan-out is the problem",
+        "whyWrong": "The event is already tiny (`{ postId: 123 }`); the bottleneck is the 14 synchronous HTTP callbacks triggered upon delivery."
+      },
+      "1": {
+        "keyInsight": "Carrying a clean public state snapshot in the event eliminates synchronous callback storms and truly decouples availability."
+      },
+      "2": {
+        "trap": "Shared cache backdoor coupling",
+        "whyWrong": "Sharing a private Redis cluster across 14 services couples everyone to internal cache serialization, TTL eviction races, and security boundaries."
+      },
+      "3": {
+        "trap": "Replacing event-driven push with wasteful polling",
+        "whyWrong": "14 services polling every 5 seconds wastes bandwidth, increases latency, and still hammers `ContentService`."
+      }
+    },
+    "wisdomTakeaway": "If an asynchronous event forces every subscriber to synchronously call the publisher right back, you haven't decoupled anything—you just added a broker in front of a stampede."
+  },
+  {
+    "id": "INT-10",
+    "pillar": "integration",
+    "difficulty": "Senior",
+    "concept": "Contract Testing vs End-to-End Environments",
+    "scenario": "Your company has 18 microservices. Before every deploy, all 18 services must pass an integrated end-to-end test suite in a shared `staging` environment. The suite takes 90 minutes, flakes 35% of the time due to dirty shared test data and someone else's broken deploy, and stalls releases.",
+    "question": "How do you restore fast, reliable integration verification across the 18 services?",
+    "options": [
+      "Replace all integration tests with unit tests using handwritten mocks for every HTTP client.",
+      "Adopt Consumer-Driven Contract Testing (e.g., Pact or OpenAPI/Protobuf schema verification in CI) alongside isolated ephemeral container tests per service, reserving a tiny smoke suite for staging.",
+      "Deploy directly to production without integration tests and rely only on Rollback.",
+      "Create 5 more shared staging environments so teams wait less in line."
+    ],
+    "correctIndex": 1,
+    "explanation": "Shared full-mesh staging environments scale quadratically in flakiness and wait time. Consumer-Driven Contract Tests verify in milliseconds during each service's CI build that producers satisfy every consumer's actual expectations (and consumers only depend on valid contract fields), drastically reducing reliance on brittle shared staging.",
+    "distractorAnalysis": {
+      "0": {
+        "trap": "Handwritten mocks drift silently from reality",
+        "whyWrong": "Mocks only verify what the consumer *assumes* the producer returns—when the producer renames a field, unit tests still pass green while production crashes."
+      },
+      "1": {
+        "keyInsight": "Contract tests verify both sides independently in seconds without needing all 18 live services running simultaneously."
+      },
+      "2": {
+        "trap": "Reckless removal of contract verification",
+        "whyWrong": "Catching schema breaks in production hurts customers and still causes noisy rollbacks, especially for async queues where bad events pollute topics."
+      },
+      "3": {
+        "trap": "Scaling a broken architecture linearly",
+        "whyWrong": "5 staging environments multiply cloud cost and environment-drift maintenance while each individual 90-minute run still flakes 35% of the time."
+      }
+    },
+    "wisdomTakeaway": "Use contract tests to prove services agree on interfaces in isolation; never turn a shared staging environment into a distributed monolith bottleneck."
+  }
+]

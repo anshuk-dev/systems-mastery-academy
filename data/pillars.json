@@ -1,0 +1,541 @@
+{
+  "title": "Systems Mastery Academy: Knowledge & Wisdom in Architecture",
+  "subtitle": "From First Principles to Principal-Level Judgment in System Integration, Modular Architecture, System Optimization, and System Scalability",
+  "pillars": [
+    {
+      "id": "integration",
+      "number": "01",
+      "name": "System Integration",
+      "tagline": "Connecting heterogeneous systems without cascading failure or schema lock-in",
+      "color": "#38bdf8",
+      "summary": "Integration is where clean diagrams meet messy distributed reality: partial failures, network partitions, clock skew, duplicate deliveries, and competing schema lifecycles.",
+      "mentalModel": "Every integration boundary is a coupling contract across four axes: temporal, spatial, semantic (schema), and operational. Expert integration minimizes unintended coupling across all four.",
+      "lessons": [
+        {
+          "id": "int-1",
+          "title": "Integration Styles & Coupling Axes",
+          "duration": "25 min",
+          "knowledge": [
+            "Four primary integration topologies: Shared Database (tightest coupling), File/Batch Transfer, Synchronous Request-Reply (REST, gRPC, GraphQL), and Asynchronous Messaging/Streaming (Queues, Pub/Sub, Kafka).",
+            "Temporal coupling: synchronous calls require caller and callee to be available simultaneously; asynchronous queues decouple availability windows.",
+            "Semantic coupling: sharing internal domain models across service boundaries forces coordinated deployments whenever internals change.",
+            "Command vs Event vs Query semantics: Commands express intent to mutate a specific target; Events broadcast immutable facts about what happened; Queries request state."
+          ],
+          "wisdom": [
+            "Shared database integration feels fastest on Day 1 and becomes an unrefactorable tar pit by Month 6 because schema migrations break unknown downstream readers.",
+            "Prefer choreography (reacting to events) when downstream workflows are independent and extensible; prefer orchestration when multi-step business invariants, timeouts, and compensation order must be visible in one place.",
+            "Do not use Kafka as a request-reply RPC bus unless you enjoy debugging correlation IDs, partition skew, and consumer lag under user-facing latency budgets."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Synchronous REST / gRPC",
+              "pros": "Simple mental model, immediate feedback, easy debugging and tracing, natural backpressure via caller timeout.",
+              "cons": "Temporal coupling, availability is product of chain (0.99^5 = 0.951), tail latency compounds across hops.",
+              "whenToUse": "Read paths requiring fresh state, low-latency user decisions, or thin internal gateways with bounded fan-out."
+            },
+            {
+              "option": "Asynchronous Queue / Event Stream",
+              "pros": "Temporal decoupling, traffic spike buffering, independent consumer scaling, easy fan-out to new subscribers.",
+              "cons": "Eventual consistency UX, harder end-to-end debugging, requires idempotency and dead-letter handling.",
+              "whenToUse": "Side-effects, cross-domain state propagation, bursty workloads, and slow downstream third-party APIs."
+            },
+            {
+              "option": "CDC (Change Data Capture)",
+              "pros": "Captures committed DB state reliably without dual-write bugs; zero application-code polling.",
+              "cons": "Couples consumers to source table schemas unless paired with an Outbox table; operational complexity of Debezium/connectors.",
+              "whenToUse": "Syncing legacy databases to search/analytics or implementing the Transactional Outbox reliably."
+            }
+          ],
+          "antiPatterns": [
+            "Distributed Shared Database: multiple services reading/writing each other's internal tables directly.",
+            "Event-Carried State Bloat / Thin-Event Ping-Pong: publishing empty events that force 10 consumers to immediately DDoS the producer's GET endpoint.",
+            "Synchronous Call Chains (>3 hops) on critical user checkout or login paths."
+          ],
+          "heuristic": "Ask: 'If the downstream system goes down for 15 minutes, must my caller fail immediately?' If no, never put a synchronous network call on that path."
+        },
+        {
+          "id": "int-2",
+          "title": "Reliability Across Unreliable Networks",
+          "duration": "30 min",
+          "knowledge": [
+            "Delivery guarantees: At-most-once (may lose), At-least-once (may duplicate), and Effectively-once (at-least-once transport + idempotent consumer + deduplication state).",
+            "Dual-Write Problem: writing to a database AND publishing to a message broker in separate operations is non-atomic—a crash in between leaves permanent inconsistency.",
+            "Transactional Outbox Pattern: persist domain changes and an outbox event row in the SAME local ACID transaction, then relay asynchronously via polling or CDC.",
+            "Saga Pattern: manages distributed transactions without 2PC locks by chaining local transactions with explicit compensating actions for failures."
+          ],
+          "wisdom": [
+            "Exact-once delivery over an arbitrary network is mathematically impossible (Two Generals Problem); what production systems actually build is at-least-once delivery with idempotent execution.",
+            "Idempotency keys must be scoped to (tenant/actor + operation + payload hash) and stored atomically with the side effect—never in a separate non-transactional cache check.",
+            "Every Dead Letter Queue (DLQ) without an alerting threshold, inspection UI, and replay runbook is just a silent data graveyard."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Two-Phase Commit (2PC / XA)",
+              "pros": "Strong atomic illusion across resources without custom compensation logic.",
+              "cons": "Coordinator single point of failure, holds locks across network RTTs, terrible tail latency, unsupported by modern SaaS APIs.",
+              "whenToUse": "Rarely in distributed microservices; mostly inside single-engine distributed databases."
+            },
+            {
+              "option": "Saga with Orchestrator",
+              "pros": "Centralizes workflow state, explicit timeouts, clear compensation paths, avoids cyclic event dependencies.",
+              "cons": "Orchestrator can become a 'god service' if business logic leaks into it; extra state store to operate.",
+              "whenToUse": "Complex multi-step workflows (payments, travel booking, order fulfillment) with 3+ steps."
+            },
+            {
+              "option": "Transactional Outbox + CDC",
+              "pros": "Eliminates dual-write inconsistency using local DB ACID guarantees; clean separation of domain and transport.",
+              "cons": "Requires outbox table cleanup/retention and deduplication on the consumer side.",
+              "whenToUse": "Default pattern whenever a service must reliably emit events on state changes."
+            }
+          ],
+          "antiPatterns": [
+            "Fire-and-forget publish inside an HTTP handler after DB commit without an outbox.",
+            "Blindly retrying non-idempotent POST/charge requests on socket timeouts (read timeout != request failed).",
+            "Infinite retry loops on poison-pill messages that block an entire Kafka partition."
+          ],
+          "heuristic": "Never trust a timeout to mean 'nothing happened'. Treat timeouts as 'unknown outcome' and require idempotency before retrying."
+        },
+        {
+          "id": "int-3",
+          "title": "Contracts, Evolution & Fault Isolation",
+          "duration": "25 min",
+          "knowledge": [
+            "Anti-Corruption Layer (ACL): translates between an external/legacy system's messy model and your clean internal domain model so external quirks don't leak inward.",
+            "Schema Compatibility: Backward (new reader reads old data), Forward (old reader reads new data), Full (both). Additive optional fields preserve compatibility; renames/type changes break it.",
+            "Expand-and-Contract Migration: (1) Expand schema to support old+new, (2) Dual-write/backfill, (3) Switch readers, (4) Contract/remove old fields.",
+            "Resilience Primitives: Timeouts (connect + read), Bounded Retries with Exponential Backoff + Full Jitter, Circuit Breakers (Closed/Open/Half-Open), and Bulkheads (isolating thread/connection pools per dependency)."
+          ],
+          "wisdom": [
+            "Retries without jitter synchronize failing clients into retry storms that keep an overloaded dependency dead long after traffic drops.",
+            "A timeout without a bulkhead still lets one slow dependency exhaust all worker threads in your service, taking down unrelated healthy endpoints.",
+            "Contract tests (e.g., Pact or schema registry checks in CI) catch breaking changes in seconds; full end-to-end staging environments catch them days too late—or miss them due to environment drift."
+          ],
+          "tradeoffs": [
+            {
+              "option": "URL/Header API Versioning (v1 -> v2)",
+              "pros": "Explicit breaking transitions, clean separation for external third-party integrators.",
+              "cons": "Forces long-term maintenance of parallel handlers and bugfixes across versions.",
+              "whenToUse": "Public/partner APIs with external consumers you cannot deploy alongside."
+            },
+            {
+              "option": "Continuous Backward-Compatible Evolution",
+              "pros": "Zero version sprawl, continuous delivery, consumers upgrade at their own pace.",
+              "cons": "Requires strict discipline (no field reuse, additive changes, deprecation telemetry).",
+              "whenToUse": "Internal APIs, Protobuf/Avro event streams, and fast-moving product teams."
+            }
+          ],
+          "antiPatterns": [
+            "Retry amplification across layers: 3 retries at Gateway x 3 at Service A x 3 at Service B = 27x load during an outage.",
+            "Default infinite or 60-second HTTP client timeouts.",
+            "Exposing raw vendor/ERP field names directly in your public API responses."
+          ],
+          "heuristic": "Retry only at ONE layer (typically closest to the origin or via explicit deadline propagation), always with jitter and a retry budget."
+        }
+      ]
+    },
+    {
+      "id": "modularity",
+      "number": "02",
+      "name": "Modular Architecture",
+      "tagline": "Structuring codebases and boundaries so change stays cheap as teams and systems grow",
+      "color": "#a78bfa",
+      "summary": "Modularity is not about splitting one repo into 40 microservices. It is about high cohesion inside boundaries, narrow interfaces across them, and aligning change rates so one feature doesn't touch ten modules.",
+      "mentalModel": "Modularity is measured by the blast radius of a requirement change. If changing tax rules requires editing UI controllers, database schemas, and three other teams' services, your boundaries are wrong regardless of how many repos you have.",
+      "lessons": [
+        {
+          "id": "mod-1",
+          "title": "Cohesion, Coupling & Connascence",
+          "duration": "25 min",
+          "knowledge": [
+            "Cohesion: how strongly elements inside a module belong together because they change for the same business reason (Common Closure Principle).",
+            "Coupling: the degree to which one module depends on the internal knowledge or timing of another.",
+            "Connascence Hierarchy (weakest to strongest): Name -> Type -> Meaning -> Position -> Algorithm -> Execution Order -> Timing -> Value -> Identity. Stronger connascence across module boundaries makes change expensive.",
+            "Vertical Slice Architecture vs Technical Layering: grouping by business capability/feature keeps changes localized, whereas horizontal layers (controllers/services/repos) scatter a single feature across every folder."
+          ],
+          "wisdom": [
+            "DRY (Don't Repeat Yourself) is widely misunderstood: duplicating incidental code across two independent bounded contexts is far healthier than creating a shared 'common-domain' library that couples their release cycles.",
+            "Physical separation (microservices) does NOT create logical modularity; if you split a tangled monolith over the network, you just traded fast in-process method calls for slow, flaky RPCs.",
+            "Hide volatile design decisions (pricing engines, external vendor SDKs, storage formats) behind stable interfaces."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Vertical Slices / Feature Modules",
+              "pros": "High cohesion per use case, minimal cross-module edits, easy onboarding and deletion.",
+              "cons": "Small amount of structural boilerplate repeated across slices if not kept lean.",
+              "whenToUse": "Business applications where features evolve independently."
+            },
+            {
+              "option": "Shared Core Library",
+              "pros": "Consistent behavior for truly universal cross-cutting utilities (logging, auth parsing, telemetry).",
+              "cons": "Version lock-in and coordinated upgrades if domain logic sneaks in.",
+              "whenToUse": "Pure technical primitives with near-zero churn; avoid for business rules."
+            }
+          ],
+          "antiPatterns": [
+            "God Util / Shared-Models Package containing every entity in the company.",
+            "Anemic Domain Model: data bags with getters/setters and business invariants scattered across 15 service classes.",
+            "Premature abstraction ('just in case' interfaces with only one implementation that mirrors the concrete class 1:1)."
+          ],
+          "heuristic": "Duplicate code before coupling domains. Wait for three real divergent use cases (Rule of Three) before extracting a shared abstraction."
+        },
+        {
+          "id": "mod-2",
+          "title": "Hexagonal Boundaries & Modular Monoliths",
+          "duration": "30 min",
+          "knowledge": [
+            "Hexagonal Architecture (Ports & Adapters): core domain logic defines abstract Ports (interfaces); external details (DBs, HTTP, Kafka, Stripe) live in Adapters that depend inward on the core.",
+            "Dependency Inversion Principle: high-level business policy never imports low-level infrastructure drivers.",
+            "Modular Monolith: single deployable unit partitioned into strictly isolated domain modules communicating through explicit public module facades or in-process events, with separate logical schemas/tables.",
+            "Distributed Monolith: separate deployables that still require lockstep releases, share databases, or fail together synchronously."
+          ],
+          "wisdom": [
+            "Start with a Modular Monolith until you have concrete organizational scaling bottlenecks, independent scaling profiles, or regulatory isolation needs. Extracting a clean module into a service takes days; untangling premature microservices takes years.",
+            "Enforce module boundaries automatically with build/lint tools (ArchUnit, Deptrac, ESLint boundaries, Go internal packages)—developer willpower always erodes under deadline pressure.",
+            "A module should own its own data. If Module A joins against Module B's SQL tables, you do not have modular boundaries."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Modular Monolith",
+              "pros": "ACID transactions inside modules, zero network serialization tax, single CI/CD, trivial refactoring across boundaries.",
+              "cons": "Shared failure domain (OOM kills process), single language/runtime, requires discipline to keep boundaries clean.",
+              "whenToUse": "90% of early-to-mid scale systems and teams under ~50-80 engineers."
+            },
+            {
+              "option": "Microservices",
+              "pros": "Independent deployment velocity for large orgs, fault/resource isolation, polyglot tech when genuinely needed, independent horizontal scaling.",
+              "cons": "Distributed systems tax (tracing, service mesh, eventual consistency, contract testing, DevOps overhead).",
+              "whenToUse": "Distinct scaling/security boundaries or 5+ autonomous teams stepping on each other's release cadence."
+            }
+          ],
+          "antiPatterns": [
+            "Nano-services: one service per database table or CRUD entity.",
+            "Entity leakage: returning ORM database entities directly from REST controllers or cross-module APIs.",
+            "Allowing Domain Core to import HTTP, SQL, or framework annotations."
+          ],
+          "heuristic": "If two services always have to be deployed together to ship one feature, they are one logical module pretending to be two."
+        },
+        {
+          "id": "mod-3",
+          "title": "Evolutionary Architecture, Conway's Law & Migrations",
+          "duration": "25 min",
+          "knowledge": [
+            "Conway's Law: systems inevitably mirror the communication structures of the organizations that build them.",
+            "Inverse Conway Maneuver: deliberately structure teams around desired bounded contexts (stream-aligned teams) rather than horizontal tech silos (DB team, API team, UI team).",
+            "Strangler Fig Pattern: incrementally route traffic from legacy system to new modular components behind an edge proxy/facade until the legacy core shrinks to zero.",
+            "Architectural Fitness Functions: automated tests in CI/production that verify structural invariants (no cyclic dependencies, latency budgets, bundle size, module isolation)."
+          ],
+          "wisdom": [
+            "Never bet the company on a 'Big Bang Rewrite'. Legacy systems embody years of undocumented edge cases; strangling them slice-by-slice delivers value every week and caps blast radius.",
+            "Dual-run shadow traffic and parity comparisons before cutting over critical read/write paths during a Strangler Fig migration.",
+            "Architecture without automated governance (fitness functions) decays via entropy—every urgent hotfix bypasses the undocumented diagram on Confluence."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Strangler Fig Migration",
+              "pros": "Incremental value delivery, low risk, continuous production validation, easy rollback per route.",
+              "cons": "Temporary coexistence complexity, data synchronization bridge needed during transition.",
+              "whenToUse": "Modernizing business-critical legacy monoliths that must remain live."
+            },
+            {
+              "option": "Branch by Abstraction",
+              "pros": "Clean in-codebase replacement of a deeply embedded library/storage engine behind an abstraction without long-lived Git branches.",
+              "cons": "Requires temporary dual-implementation adapter and feature flags.",
+              "whenToUse": "Swapping core dependencies (e.g., search engine, payment SDK, ORM) safely in trunk-based development."
+            }
+          ],
+          "antiPatterns": [
+            "Big Bang 18-month rewrite while feature work continues on the legacy branch (the moving-target trap).",
+            "Siloed 'Backend / Frontend / DBA' teams building microservices—guarantees multi-team tickets for every trivial change.",
+            "Unmonitored feature flags left behind after migrations, creating exponential test matrices."
+          ],
+          "heuristic": "Never start a migration without knowing how you will verify parity and how you will roll back in under 5 minutes."
+        }
+      ]
+    },
+    {
+      "id": "optimization",
+      "number": "03",
+      "name": "System Optimization",
+      "tagline": "Eliminating bottlenecks with physics, telemetry, and mechanical sympathy—never guesswork",
+      "color": "#34d399",
+      "summary": "Premature optimization adds complexity for zero gain; disciplined optimization starts with measurement, targets the dominant bottleneck, and respects hardware, database, and caching physics.",
+      "mentalModel": "Optimization is a closed scientific loop: Define SLO -> Measure (USE/RED + Profiles) -> Form Hypothesis -> Benchmark Change -> Verify Tail Latency & Cost. Guessing without a flamegraph optimizes the 2% while ignoring the 80%.",
+      "lessons": [
+        {
+          "id": "opt-1",
+          "title": "Performance Physics, Little's Law & Tail Latency",
+          "duration": "25 min",
+          "knowledge": [
+            "Latency vs Throughput vs Goodput: Latency is duration of one operation; Throughput is ops/sec; Goodput is useful, non-retried, non-failed ops/sec.",
+            "Little's Law: L = lambda * W (Average concurrency in system = Arrival rate x Average residence time). As latency W spikes under saturation, concurrency L explodes and exhausts threads/connections.",
+            "Queueing Theory & Utilization Hockey Stick: as resource utilization approaches 100%, wait time grows nonlinearly (~1/(1 - rho)), causing p99 latency spikes long before 100% CPU.",
+            "Tail Latency Amplification: if a user request fans out to N=20 parallel backends each with 1% slow requests (p99), the probability of at least one slow backend is 1 - 0.99^20 = 18.2%!"
+          ],
+          "wisdom": [
+            "Averages lie! If 99 requests take 10ms and 1 takes 10s, your mean is ~110ms while your VIP users experience 10-second timeouts. Always track p50, p95, p99, and p99.9.",
+            "When a system saturates, adding retries without backoff increases lambda in Little's Law, pushing W higher in a death spiral (metastable failure).",
+            "Instrument with RED (Rate, Errors, Duration) for services and USE (Utilization, Saturation, Errors) for infrastructure resources before touching a single line of code."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Hedged Requests (Speculative Retry)",
+              "pros": "Dramatically cuts p99 tail latency caused by transient GC pauses or noisy neighbors.",
+              "cons": "Increases baseline load by ~1-5% (if triggered at p95 delay); dangerous without a strict hedge budget during outages.",
+              "whenToUse": "Idempotent, low-cost read paths with large fan-out and strict p99 SLOs."
+            },
+            {
+              "option": "Latency vs Throughput Batching",
+              "pros": "Amortizes syscall, network, and fsync overhead—10x throughput gain.",
+              "cons": "Adds micro-batching wait delay (linger.ms) to individual request latency.",
+              "whenToUse": "High-volume telemetry, event ingestion, Kafka producers, and bulk DB writes."
+            }
+          ],
+          "antiPatterns": [
+            "Optimizing CPU micro-benchmarks when 92% of wall-clock latency is serial database/network I/O.",
+            "Reporting only average latency in executive dashboards.",
+            "Disabling health/circuit protections during high utilization, triggering metastable collapse."
+          ],
+          "heuristic": "Never optimize what you haven't profiled under realistic concurrency. Use a flamegraph to find the widest bar, not the prettiest loop."
+        },
+        {
+          "id": "opt-2",
+          "title": "Compute, Memory, I/O & Connection Efficiency",
+          "duration": "25 min",
+          "knowledge": [
+            "Latency Hierarchy: L1 cache (~1ns) < RAM (~100ns) < NVMe SSD (~25-100us) < Same-AZ Network RTT (~0.5ms) < Cross-Region RTT (~50-150ms).",
+            "Connection Pooling: TCP + TLS handshakes cost multiple RTTs; pooling amortizes setup cost. Optimal DB pool size is surprisingly small: roughly (CPU_cores * 2) + effective_spindle_count—not 500 per pod.",
+            "Lock Contention & Context Switching: oversubscribing CPU threads or coarse-grained locks serializes multi-core execution and thrash CPU caches.",
+            "Zero-Copy & Streaming: avoid loading multi-hundred-MB payloads into heap memory (causes GC pauses and OOMs); stream buffers or use sendfile/mmap where applicable."
+          ],
+          "wisdom": [
+            "Massive DB connection pools (e.g., 100 pods x 50 connections = 5,000 DB connections) destroy Postgres throughput via context switching and lock contention. Put PgBouncer/proxy pooling in front and keep active server connections small.",
+            "Serializing/deserializing huge JSON blobs on hot paths often burns more CPU than business logic; switch hot internal hops to binary Protobuf/MsgPack or project only needed fields.",
+            "Compression (zstd/gzip) saves bandwidth and storage, but high compression levels burn CPU—match codec and level to whether you are network-bound or CPU-bound."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Async Non-Blocking Event Loop (Node/Netty/Tokio)",
+              "pros": "Handles tens of thousands of concurrent I/O-bound connections with minimal memory per connection.",
+              "cons": "One blocking CPU call or synchronous driver freezes the entire worker loop.",
+              "whenToUse": "I/O-heavy gateways, proxies, chat/streaming servers."
+            },
+            {
+              "option": "Bounded Thread Pool / Virtual Threads",
+              "pros": "Linear readable code, natural isolation for mixed workloads; virtual threads give high concurrency cheaply.",
+              "cons": "OS threads cost ~1MB stack + context switch overhead if unbounded; still constrained by downstream DB pool limits.",
+              "whenToUse": "CPU+I/O business services where synchronous readability and strict concurrency caps matter."
+            }
+          ],
+          "antiPatterns": [
+            "Creating a new HTTP/DB client per request (ephemeral port exhaustion + TLS handshake penalty).",
+            "Unbounded queues in front of worker pools (causes OOM crashes and stale timeouts).",
+            "Loading entire paginated exports into RAM instead of cursor streaming."
+          ],
+          "heuristic": "Count your network round trips first. Eliminating 5 sequential 2ms RPCs saves 10ms instantly; optimizing a hash map saves 10 microseconds."
+        },
+        {
+          "id": "opt-3",
+          "title": "Database Access & Caching Mastery",
+          "duration": "30 min",
+          "knowledge": [
+            "N+1 Query Problem: fetching N parent rows in 1 query and issuing N separate queries for children—turns 2ms into 200ms+ under load.",
+            "Composite Indexes & Leftmost Prefix Rule: an index on (tenant_id, status, created_at) serves queries filtering on tenant_id, or (tenant_id, status), NOT status alone; covering indexes avoid heap lookups.",
+            "Caching Patterns: Cache-Aside (lazy load), Read-Through, Write-Through, Write-Behind (async flush—risks data loss if cache crashes).",
+            "Cache Failure Modes: Cache Stampede / Thundering Herd (popular key expires -> 1,000 requests hit DB simultaneously), Cache Penetration (queries for non-existent keys bypass cache), Hot Keys."
+          ],
+          "wisdom": [
+            "Offset pagination (`OFFSET 500000 LIMIT 20`) forces the DB to scan and discard 500,000 rows. Always use keyset/cursor pagination (`WHERE id > last_id LIMIT 20`) on deep datasets.",
+            "Prevent cache stampedes using Singleflight (request coalescing per key in-process/distributed) or Probabilistic Early Expiration (XFetch) + jittered TTLs.",
+            "Never add a cache to hide an unindexed `SELECT *` query—when the cache cold-starts or flushes, your unindexed DB will immediately melt down."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Cache-Aside (Lazy Population)",
+              "pros": "Cache only holds actually requested data; resilient to cache downtime (degrades to DB).",
+              "cons": "Cache miss latency penalty; potential stale read window between DB write and cache invalidation.",
+              "whenToUse": "Default general-purpose read caching for most web/API workloads."
+            },
+            {
+              "option": "Local In-Memory L1 + Distributed Redis L2",
+              "pros": "Sub-millisecond reads for extreme hot keys without saturating Redis network NIC.",
+              "cons": "Cross-node invalidation complexity; tolerable only with short TTLs (1-10s) or pub/sub invalidation.",
+              "whenToUse": "Read-heavy config, feature flags, or viral hot keys."
+            }
+          ],
+          "antiPatterns": [
+            "Caching mutable user-specific data with identical TTLs (synchronized expiration storms).",
+            "Negative caching omission: allowing bot attacks on random missing IDs to punch straight through Redis to primary SQL.",
+            "Using `SELECT *` with ORMs that silently eager-load megabytes of unused text/JSON columns."
+          ],
+          "heuristic": "Fix the query plan and indexes FIRST, add connection pooling SECOND, and add caching THIRD—with explicit stampede and negative-lookup protection."
+        }
+      ]
+    },
+    {
+      "id": "scalability",
+      "number": "04",
+      "name": "System Scalability",
+      "tagline": "Growing capacity predictably by orders of magnitude without collapsing under coordination cost",
+      "color": "#f59e0b",
+      "summary": "Scalability is not 'add Kubernetes'. True scalability means keeping latency, cost-per-unit-work, and operational toil linear—or sublinear—as traffic, data volume, and failure rates grow 10x–100x.",
+      "mentalModel": "Every system hits a wall where adding more machines stops helping or actually makes throughput WORSE. Your job is to identify the hidden serialization point—a lock, a primary DB, a shared counter, or cross-node chatter—and remove or partition it.",
+      "lessons": [
+        {
+          "id": "sca-1",
+          "title": "Scalability Laws & Bottleneck Modeling",
+          "duration": "25 min",
+          "knowledge": [
+            "Amdahl's Law: speedup is bounded by the sequential fraction sigma: S(N) = 1 / (sigma + (1 - sigma)/N). Even 5% serial work caps speedup at 20x with infinite CPUs.",
+            "Gunther's Universal Scalability Law (USL): C(N) = N / (1 + alpha*(N - 1) + beta*N*(N - 1)), modeling both contention (alpha, queueing on shared locks/DB) and coherency (beta, cross-node synchronization/cache invalidation).",
+            "Retrograde Scalability: when beta > 0, throughput actually DROPS past an optimal N_max because nodes spend more time coordinating than serving work.",
+            "Scale Cube (AKF): X-axis (clone stateless replicas), Y-axis (split by functional service/domain), Z-axis (partition/shard by data key like tenant_id or user_id)."
+          ],
+          "wisdom": [
+            "Vertical scaling (scaling up) is underrated: upgrading a single Postgres primary with faster NVMe and RAM takes 10 minutes and preserves ACID transactions, whereas premature sharding adds permanent complexity.",
+            "Load testing at 2x peak doesn't expose beta (coherency) bottlenecks—you only discover coordination collapse when cluster size grows or distributed locks thrash.",
+            "Always look for the 'hidden singleton' in a horizontal design: a global sequence generator, a single distributed lock for all tenants, or a centralized session DB."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Vertical Scaling (Scale Up)",
+              "pros": "Zero distributed coordination, linear simplicity, preserves single-node ACID and joins.",
+              "cons": "Hardware ceiling, blast radius of single node, higher marginal cost at extreme tiers.",
+              "whenToUse": "Until single-node limits (write IOPS, RAM, or availability SLA) are genuinely approached."
+            },
+            {
+              "option": "Horizontal Partitioning (Z-Axis Sharding)",
+              "pros": "Near-linear write and storage scaling across commodity nodes; isolates blast radius per shard.",
+              "cons": "Cross-shard joins/transactions become hard or impossible; rebalancing and hot-shard skew.",
+              "whenToUse": "Write throughput or dataset size exceeds single-node capacity."
+            }
+          ],
+          "antiPatterns": [
+            "Scaling stateless app servers from 20 to 200 pods when the single primary database is already at 95% CPU (just creates 10x more waiters!).",
+            "Global distributed locking on high-frequency workflows.",
+            "Ignoring capacity headroom (running at 85% steady state leaves zero room for a single AZ failure)."
+          ],
+          "heuristic": "Whenever someone proposes 'just add more replicas', ask: 'What shared resource will those extra replicas contend on?'"
+        },
+        {
+          "id": "sca-2",
+          "title": "Data Partitioning, Replication & Consistency",
+          "duration": "30 min",
+          "knowledge": [
+            "Sharding Strategies: Hash-based (uniform distribution, poor range queries), Range-based (fast range scans, vulnerable to hot spots on monotonic keys like timestamps), Directory-based (flexible, lookup overhead).",
+            "Consistent Hashing with Virtual Nodes (vnodes): maps both keys and nodes onto a hash ring so adding/removing a node moves only ~1/N keys instead of rehashing everything.",
+            "Replication Models: Single-Leader (read replicas scale reads, replication lag breaks read-your-writes), Multi-Leader (multi-region writes, conflict resolution required), Leaderless/Quorum (W + R > N).",
+            "CQRS (Command Query Responsibility Segregation): separate optimized write model from denormalized read projections (e.g., Postgres -> Kafka -> Elasticsearch)."
+          ],
+          "wisdom": [
+            "Choosing the shard key is a near-irreversible architectural decision. A bad shard key (e.g., sharding multi-tenant SaaS by `created_at` or `country` when one country is 70% of traffic) creates permanent hot shards.",
+            "Never route a user's immediate post-write redirect to an async read replica without session-stickiness or LSN/version pinning—users seeing their just-saved profile disappear triggers panic and duplicate submissions.",
+            "Celebrity / Hot-Partition problem (e.g., Justin Bieber's posts or a Black Friday merchant): even consistent hashing puts one key on one shard. Mitigate by key salting (`key#0..k`), dedicated isolated shards, or edge caching."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Read Replicas + Session Pinning",
+              "pros": "Scales read-heavy workloads 5-10x with minimal app rewrite; preserves SQL richness.",
+              "cons": "Write throughput still capped by single primary; replication lag spikes under heavy batch writes.",
+              "whenToUse": "Read:Write ratio >= 10:1 where writes still fit on one primary."
+            },
+            {
+              "option": "CQRS + Async Projections",
+              "pros": "Tailor read store (search, graph, columnar) independently of transactional write store.",
+              "cons": "Eventual consistency lag, dual storage cost, projection rebuild operations.",
+              "whenToUse": "Complex search/analytics/feed views that choke OLTP normalized tables."
+            }
+          ],
+          "antiPatterns": [
+            "Sharding by monotonically increasing auto-increment ID or timestamp for write-heavy ingestion.",
+            "Doing scatter-gather cross-shard queries on hot user-facing endpoints.",
+            "Assuming eventual consistency means 'zero UX work'—failing to design optimistic UI or read-your-own-writes guarantees."
+          ],
+          "heuristic": "Scale reads with caching and replicas first; scale writes by shedding/batching second; shard data ONLY when a single write primary truly cannot keep up."
+        },
+        {
+          "id": "sca-3",
+          "title": "Backpressure, Load Shedding & Geo-Distribution",
+          "duration": "30 min",
+          "knowledge": [
+            "Backpressure: propagating downstream saturation upstream so producers slow down instead of buffering infinitely until OOM.",
+            "Load Shedding: intentionally dropping excess or low-priority requests early (at edge/gateway) so critical traffic still meets SLOs (fail fast > fail slow for everyone).",
+            "Rate Limiting Algorithms: Token Bucket (allows controlled bursts), Leaky Bucket (smooths output rate), Sliding Window Log/Counter (avoids boundary-spike double-bursts of Fixed Window).",
+            "Multi-Region Topologies: Active-Passive (warm/pilot-light DR, simpler consistency, higher failover RTO) vs Active-Active (low global latency, complex write conflicts, CRDTs or home-region pinning)."
+          ],
+          "wisdom": [
+            "A system at 300% load WITHOUT load shedding serves 0% successful requests because every request times out after wasting CPU. With load shedding of 67% at the edge, it serves 100% of capacity cleanly.",
+            "Always shed by business priority and cost: drop background analytics, bots, and unauthenticated crawls before dropping checkout payments or login.",
+            "Multi-region Active-Active is exponentially harder than multi-AZ. Most companies think they need Active-Active writes when Geo-routed reads + single-region/home-pinned writes gives 95% of the benefit at 10% of the complexity."
+          ],
+          "tradeoffs": [
+            {
+              "option": "Token Bucket Rate Limiter",
+              "pros": "Supports legitimate short traffic bursts while enforcing steady-state average; O(1) memory per key.",
+              "cons": "Distributed enforcement requires atomic Redis Lua scripts or local-approximation sync.",
+              "whenToUse": "Public APIs and per-tenant fairness quotas."
+            },
+            {
+              "option": "Active-Active with Home-Region Pinning",
+              "pros": "Low local latency and regional blast-radius isolation without multi-master write conflicts.",
+              "cons": "Cross-region travel/collaboration requires forwarding writes to user's home region.",
+              "whenToUse": "Global user bases (EU/US/APAC) with regional data residency (GDPR) and latency needs."
+            }
+          ],
+          "antiPatterns": [
+            "Fixed-window rate limiting on high-value endpoints (allows 2x burst right across the minute boundary).",
+            "Retry-after omission on 429/503 responses, causing clients to immediately hammer the gateway again.",
+            "Testing disaster failover only on paper (a DR plan that isn't exercised in chaos/gamedays doesn't work)."
+          ],
+          "heuristic": "Protect goodput at all costs: reject early at the cheapest layer, prioritize critical revenue/control-plane paths, and propagate deadlines downstream."
+        }
+      ]
+    },
+    {
+      "id": "capstone",
+      "number": "05",
+      "name": "Integrated Systems Capstone",
+      "tagline": "Synthesizing Integration, Modularity, Optimization, and Scalability under real-world constraints",
+      "color": "#f472b6",
+      "summary": "Real engineering problems never arrive labeled 'This is a Scalability question'. A caching fix breaks consistency; a modular microservice split blows up tail latency; an integration retry triggers a cascading outage.",
+      "mentalModel": "Every architectural decision shifts complexity rather than destroying it. Principal engineering wisdom is knowing *where* to place the complexity so it stays observable, reversible, and proportional to your team's operational maturity.",
+      "lessons": [
+        {
+          "id": "cap-1",
+          "title": "Cross-Pillar Trade-offs & Principal Decision Framework",
+          "duration": "30 min",
+          "knowledge": [
+            "Tension 1 (Modularity vs Optimization): splitting into fine-grained network services improves team autonomy but replaces sub-microsecond function calls with millisecond serialization and tail-latency amplification.",
+            "Tension 2 (Integration vs Scalability): synchronous request-reply preserves immediate invariants but couples availability and limits burst absorption compared to async outbox pipelines.",
+            "Tension 3 (Optimization vs Consistency): aggressive caching and read replicas slash DB load and latency, but introduce stale-read windows and cache invalidation races.",
+            "Reversibility Matrix (Two-Way vs One-Way Doors): invest deep upfront design only in hard-to-reverse decisions (data ownership boundaries, shard keys, public contracts, consistency guarantees)."
+          ],
+          "wisdom": [
+            "When diagnosing an incident, trace in reverse order of layers: Load/Traffic -> Edge/Gateway -> App Threads/Pools -> Cache -> Database/Locks -> Downstream Integrations.",
+            "Never adopt a pattern just because a hyperscaler blogged about it—Google/Netflix solve problems at 10,000-engineer and million-QPS scale where the cost of coordination differs completely from yours.",
+            "Write RFCs that explicitly list 'What breaks first at 10x load?' and 'How do we disable/roll back this integration in 60 seconds?'"
+          ],
+          "tradeoffs": [
+            {
+              "option": "Boring Monolith + Outbox + Read Replica + Redis",
+              "pros": "Handles 10k-50k+ RPS easily, small team velocity, high observability, minimal distributed failure modes.",
+              "cons": "Requires modular discipline inside repo; less suited for 200+ engineers sharing one deploy pipeline.",
+              "whenToUse": "Default baseline architecture until concrete bottlenecks prove otherwise."
+            },
+            {
+              "option": "Distributed Event-Driven + Sharded Services",
+              "pros": "Extreme scale, independent fault/deploy domains, multi-region resilience.",
+              "cons": "High operational floor (meshes, tracing, schema registries, distributed debugging, SRE staffing).",
+              "whenToUse": "High-scale, multi-team enterprises with mature platform engineering."
+            }
+          ],
+          "antiPatterns": [
+            "Resume-Driven Architecture: adopting Kafka + 15 microservices + GraphQL federation for 50 requests/second.",
+            "Local Optimization Bias: speeding up one service 10x only to discover it now overwhelms the unscaled downstream payment partner.",
+            "Missing Ownership: 'shared' infrastructure or queues that belong to everyone and therefore no one during a 2 AM outage."
+          ],
+          "heuristic": "Optimize for reversibility, debuggability at 2 AM, and alignment with team topology—not diagram elegance."
+        }
+      ]
+    }
+  ]
+}
